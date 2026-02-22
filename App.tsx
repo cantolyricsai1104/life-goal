@@ -9,6 +9,7 @@ import { LandingPage } from './components/LandingPage';
 import { useAuth } from './contexts/AuthContext';
 import { saveRecord } from './services/recordsService';
 import { fetchUserGoals, upsertUserGoal, deleteUserGoal } from './services/goalsService';
+import { fetchUserScheduleTasks, upsertUserScheduleTask, deleteUserScheduleTask } from './services/scheduleTasksService';
 import { v4 as uuidv4 } from 'uuid';
 
 const MOCK_GOALS: Goal[] = [
@@ -59,21 +60,26 @@ const App: React.FC = () => {
   const { user, loading } = useAuth();
 
   useEffect(() => {
-    const loadGoals = async () => {
+    const loadData = async () => {
       if (!user) {
         setGoals([]);
+        setScheduleTasks([]);
         return;
       }
 
       try {
-        const remoteGoals = await fetchUserGoals(user);
+        const [remoteGoals, remoteTasks] = await Promise.all([
+          fetchUserGoals(user),
+          fetchUserScheduleTasks(user),
+        ]);
         setGoals(remoteGoals);
+        setScheduleTasks(remoteTasks);
       } catch (error) {
-        console.error('Failed to load goals from Supabase', error);
+        console.error('Failed to load data from Supabase', error);
       }
     };
 
-    void loadGoals();
+    void loadData();
   }, [user]);
 
   const handleStartTimer = (habit: Habit) => {
@@ -102,8 +108,9 @@ const App: React.FC = () => {
       return;
     }
 
-    setScheduleTasks(prev =>
-      prev.map(habit => {
+    let updatedTasks: Habit[] = [];
+    setScheduleTasks(prev => {
+      updatedTasks = prev.map(habit => {
         if (habit.id !== habitId) return habit;
         if (habit.completedDates.includes(today)) return habit;
 
@@ -112,8 +119,18 @@ const App: React.FC = () => {
           completedDates: [...habit.completedDates, today],
           streak: habit.streak + 1,
         };
-      })
-    );
+      });
+      return updatedTasks;
+    });
+
+    if (user) {
+      const updatedTask = updatedTasks.find(h => h.id === habitId);
+      if (updatedTask) {
+        void upsertUserScheduleTask(user, updatedTask).catch((error) => {
+          console.error('Failed to persist schedule task completion to Supabase', error);
+        });
+      }
+    }
   };
 
   const handleToggleHabitCompletion = (habitId: string) => {
@@ -140,8 +157,9 @@ const App: React.FC = () => {
       return;
     }
 
-    setScheduleTasks(prev =>
-      prev.map(habit => {
+    let updatedTasks: Habit[] = [];
+    setScheduleTasks(prev => {
+      updatedTasks = prev.map(habit => {
         if (habit.id !== habitId) return habit;
         const isCompleted = habit.completedDates.includes(today);
         const completedDates = isCompleted
@@ -149,8 +167,18 @@ const App: React.FC = () => {
           : [...habit.completedDates, today];
         const streak = isCompleted ? Math.max(0, habit.streak - 1) : habit.streak + 1;
         return { ...habit, completedDates, streak };
-      })
-    );
+      });
+      return updatedTasks;
+    });
+
+    if (user) {
+      const updatedTask = updatedTasks.find(h => h.id === habitId);
+      if (updatedTask) {
+        void upsertUserScheduleTask(user, updatedTask).catch((error) => {
+          console.error('Failed to persist schedule task toggle to Supabase', error);
+        });
+      }
+    }
   };
 
   const handleUpdateHabitSchedule = (habitId: string, updates: Partial<Habit>) => {
@@ -165,9 +193,20 @@ const App: React.FC = () => {
       return;
     }
 
-    setScheduleTasks(prev =>
-      prev.map(h => (h.id === habitId ? { ...h, ...updates } : h))
-    );
+    let updatedTasks: Habit[] = [];
+    setScheduleTasks(prev => {
+      updatedTasks = prev.map(h => (h.id === habitId ? { ...h, ...updates } : h));
+      return updatedTasks;
+    });
+
+    if (user) {
+      const updatedTask = updatedTasks.find(h => h.id === habitId);
+      if (updatedTask) {
+        void upsertUserScheduleTask(user, updatedTask).catch((error) => {
+          console.error('Failed to persist schedule task update to Supabase', error);
+        });
+      }
+    }
   };
 
   const handleCreateHabitFromSchedule = (timeOfDay: string, duration: number, title: string) => {
@@ -182,6 +221,12 @@ const App: React.FC = () => {
     };
 
     setScheduleTasks(prev => [...prev, newHabit]);
+
+    if (user) {
+      void upsertUserScheduleTask(user, newHabit).catch((error) => {
+        console.error('Failed to persist schedule task to Supabase', error);
+      });
+    }
   };
 
   const handleDeleteHabitFromSchedule = (habitId: string) => {
@@ -197,6 +242,12 @@ const App: React.FC = () => {
     }
 
     setScheduleTasks(prev => prev.filter(habit => habit.id !== habitId));
+
+    if (user) {
+      void deleteUserScheduleTask(user, habitId).catch((error) => {
+        console.error('Failed to delete schedule task from Supabase', error);
+      });
+    }
   };
 
   const handleAddGoal = async (goal: Goal) => {

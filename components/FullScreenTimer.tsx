@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { X, MoreHorizontal, Play, Pause, Plus, ChevronLeft } from './Icons';
 import { Habit } from '../types';
+import { useAuth } from '../contexts/AuthContext';
+import { fetchUserTimerMemos, upsertUserTimerMemo, deleteUserTimerMemo } from '../services/timerMemosService';
 
 interface FullScreenTimerProps {
   isOpen: boolean;
@@ -39,6 +41,7 @@ export const FullScreenTimer: React.FC<FullScreenTimerProps> = ({
   habit,
   onComplete
 }) => {
+  const { user } = useAuth();
   const [timeLeft, setTimeLeft] = useState(0);
   const [isActive, setIsActive] = useState(false);
   const [memos, setMemos] = useState<Memo[]>([]);
@@ -51,8 +54,21 @@ export const FullScreenTimer: React.FC<FullScreenTimerProps> = ({
     if (isOpen && habit) {
       setTimeLeft((habit.recommendedDuration || 30) * 60);
       setIsActive(false);
+      if (user) {
+        void fetchUserTimerMemos(user, habit.id)
+          .then((stored) => {
+            setMemos((stored as Memo[]) ?? []);
+          })
+          .catch((error) => {
+            console.error('Failed to load timer memos from Supabase', error);
+          });
+      } else {
+        setMemos([]);
+      }
+    } else if (!isOpen) {
+      setMemos([]);
     }
-  }, [isOpen, habit]);
+  }, [isOpen, habit, user]);
 
   useEffect(() => {
     if (isActive && timeLeft > 0) {
@@ -108,61 +124,104 @@ export const FullScreenTimer: React.FC<FullScreenTimerProps> = ({
       items: type === 'todo' ? [{ id: createId(), text: '', done: false }] : [],
     };
     setMemos(prev => [...prev, newMemo]);
+    if (user && habit) {
+      void upsertUserTimerMemo(user, habit.id, newMemo.id, newMemo).catch((error) => {
+        console.error('Failed to persist timer memo to Supabase', error);
+      });
+    }
     setContextMenu(null);
   };
 
   const deleteMemo = (memoId: string) => {
     setMemos(prev => prev.filter(memo => memo.id !== memoId));
+    if (user && habit) {
+      void deleteUserTimerMemo(user, habit.id, memoId).catch((error) => {
+        console.error('Failed to delete timer memo from Supabase', error);
+      });
+    }
     setContextMenu(null);
   };
 
   const updateMemoText = (memoId: string, text: string) => {
+    let updated: Memo | null = null;
     setMemos(prev =>
-      prev.map(memo => (memo.id === memoId ? { ...memo, text } : memo))
+      prev.map(memo => {
+        if (memo.id !== memoId) return memo;
+        const next = { ...memo, text };
+        updated = next;
+        return next;
+      })
     );
+    if (user && habit && updated) {
+      void upsertUserTimerMemo(user, habit.id, memoId, updated).catch((error) => {
+        console.error('Failed to persist timer memo update to Supabase', error);
+      });
+    }
   };
 
   const updateTodoText = (memoId: string, itemId: string, text: string) => {
+    let updated: Memo | null = null;
     setMemos(prev =>
-      prev.map(memo =>
-        memo.id === memoId
-          ? {
-              ...memo,
-              items: memo.items.map(item =>
-                item.id === itemId ? { ...item, text } : item
-              ),
-            }
-          : memo
-      )
+      prev.map(memo => {
+        if (memo.id !== memoId) return memo;
+        const next: Memo = {
+          ...memo,
+          items: memo.items.map(item =>
+            item.id === itemId ? { ...item, text } : item
+          ),
+        };
+        updated = next;
+        return next;
+      })
     );
+    if (user && habit && updated) {
+      void upsertUserTimerMemo(user, habit.id, memoId, updated).catch((error) => {
+        console.error('Failed to persist timer memo update to Supabase', error);
+      });
+    }
   };
 
   const toggleTodoItem = (memoId: string, itemId: string) => {
+    let updated: Memo | null = null;
     setMemos(prev =>
-      prev.map(memo =>
-        memo.id === memoId
-          ? {
-              ...memo,
-              items: memo.items.map(item =>
-                item.id === itemId ? { ...item, done: !item.done } : item
-              ),
-            }
-          : memo
-      )
+      prev.map(memo => {
+        if (memo.id !== memoId) return memo;
+        const next: Memo = {
+          ...memo,
+          items: memo.items.map(item =>
+            item.id === itemId ? { ...item, done: !item.done } : item
+          ),
+        };
+        updated = next;
+        return next;
+      })
     );
+    if (user && habit && updated) {
+      void upsertUserTimerMemo(user, habit.id, memoId, updated).catch((error) => {
+        console.error('Failed to persist timer memo update to Supabase', error);
+      });
+    }
   };
 
   const addTodoItem = (memoId: string) => {
+    let updated: Memo | null = null;
+    const newItem: MemoTodoItem = { id: createId(), text: '', done: false };
     setMemos(prev =>
-      prev.map(memo =>
-        memo.id === memoId
-          ? {
-              ...memo,
-              items: [...memo.items, { id: createId(), text: '', done: false }],
-            }
-          : memo
-      )
+      prev.map(memo => {
+        if (memo.id !== memoId) return memo;
+        const next: Memo = {
+          ...memo,
+          items: [...memo.items, newItem],
+        };
+        updated = next;
+        return next;
+      })
     );
+    if (user && habit && updated) {
+      void upsertUserTimerMemo(user, habit.id, memoId, updated).catch((error) => {
+        console.error('Failed to persist timer memo update to Supabase', error);
+      });
+    }
   };
 
   if (!isOpen || !habit) return null;
