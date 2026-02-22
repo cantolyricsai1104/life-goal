@@ -38,13 +38,15 @@ export const GoalWizard: React.FC<GoalWizardProps> = ({ onAddGoal, onClose }) =>
       aspect: plan.aspect as LifeAspect,
       progress: 0,
       milestones: plan.milestones.map(m => ({ id: uuidv4(), title: m, completed: false })),
-      habits: plan.habits.map(h => ({ 
+      habits: plan.habits.map((h, index) => ({ 
         id: uuidv4(), 
         title: h.title, 
         frequency: 'daily', 
         completedDates: [], 
         streak: 0,
-        recommendedDuration: h.duration
+        recommendedDuration: h.duration ?? 20,
+        timeOfDay: index === 0 ? '07:00' : index === 1 ? '20:00' : '12:00',
+        targetDays: 30,
       })),
       aiAdvice: plan.motivationalQuote,
       createdAt: Date.now()

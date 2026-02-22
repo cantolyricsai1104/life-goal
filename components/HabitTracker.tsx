@@ -6,11 +6,44 @@ interface HabitTrackerProps {
   habit: Habit;
   onToggle: (habitId: string) => void;
   onStartTimer: (habit: Habit) => void;
+  onUpdateSettings: (habitId: string, updates: Partial<Habit>) => void;
 }
 
-export const HabitTracker: React.FC<HabitTrackerProps> = ({ habit, onToggle, onStartTimer }) => {
+export const HabitTracker: React.FC<HabitTrackerProps> = ({ habit, onToggle, onStartTimer, onUpdateSettings }) => {
   const today = new Date().toISOString().split('T')[0];
   const isCompletedToday = habit.completedDates.includes(today);
+
+  const handleEditSettings = (e: React.MouseEvent) => {
+    e.stopPropagation();
+
+    const durationInput = window.prompt(
+      'How many minutes per day for this habit?',
+      (habit.recommendedDuration ?? 20).toString()
+    );
+    if (durationInput === null) return;
+    const duration = parseInt(durationInput, 10);
+
+    const targetDaysInput = window.prompt(
+      'For how many days do you want to keep this habit?',
+      habit.targetDays ? habit.targetDays.toString() : '30'
+    );
+
+    const updates: Partial<Habit> = {};
+    if (!Number.isNaN(duration)) {
+      updates.recommendedDuration = duration;
+    }
+
+    if (targetDaysInput !== null) {
+      const targetDays = parseInt(targetDaysInput, 10);
+      if (!Number.isNaN(targetDays)) {
+        updates.targetDays = targetDays;
+      }
+    }
+
+    if (Object.keys(updates).length > 0) {
+      onUpdateSettings(habit.id, updates);
+    }
+  };
 
   return (
     <div 
@@ -37,8 +70,17 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({ habit, onToggle, onS
               {habit.streak} day streak
             </p>
             {habit.recommendedDuration && (
-              <span className="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded border border-slate-200 font-medium">
+              <button
+                type="button"
+                onClick={handleEditSettings}
+                className="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded border border-slate-200 font-medium hover:bg-slate-200"
+              >
                 {habit.recommendedDuration}m goal
+              </button>
+            )}
+            {habit.targetDays && (
+              <span className="text-[10px] bg-emerald-50 text-emerald-700 px-1.5 py-0.5 rounded border border-emerald-100 font-medium whitespace-nowrap">
+                {habit.targetDays}-day plan
               </span>
             )}
           </div>

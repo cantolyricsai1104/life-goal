@@ -15,6 +15,7 @@ export interface Habit {
   streak: number;
   recommendedDuration?: number; // In minutes, optional
   timeOfDay?: string; // HH:MM format (24h), e.g., "08:00"
+  targetDays?: number;
 }
 
 export interface Milestone {

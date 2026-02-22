@@ -50,6 +50,14 @@ export const GoalCard: React.FC<GoalCardProps> = ({ goal, onUpdateGoal, onDelete
     onUpdateGoal({ ...goal, habits: updatedHabits });
   };
 
+  const handleUpdateHabitSettings = (habitId: string, updates: Partial<Habit>) => {
+    const updatedHabits = goal.habits.map(h =>
+      h.id === habitId ? { ...h, ...updates } : h
+    );
+
+    onUpdateGoal({ ...goal, habits: updatedHabits });
+  };
+
   const handleToggleMilestone = (milestoneId: string) => {
     const updatedMilestones = goal.milestones.map(m => 
       m.id === milestoneId ? { ...m, completed: !m.completed } : m
@@ -130,6 +138,7 @@ export const GoalCard: React.FC<GoalCardProps> = ({ goal, onUpdateGoal, onDelete
                     habit={habit} 
                     onToggle={handleToggleHabit} 
                     onStartTimer={onStartTimer}
+                    onUpdateSettings={handleUpdateHabitSettings}
                   />
                 ))}
               </div>
