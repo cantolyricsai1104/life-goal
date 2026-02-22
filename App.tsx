@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Plus, Trophy, BarChart3, Calendar } from './components/Icons';
 import { Goal, LifeAspect, Habit } from './types';
 import { GoalCard } from './components/GoalCard';
@@ -10,6 +10,7 @@ import { UserHistoryPanel } from './components/UserHistoryPanel';
 import { LandingPage } from './components/LandingPage';
 import { useAuth } from './contexts/AuthContext';
 import { saveRecord } from './services/recordsService';
+import { fetchUserGoals, upsertUserGoal, deleteUserGoal } from './services/goalsService';
 import { v4 as uuidv4 } from 'uuid';
 
 const MOCK_GOALS: Goal[] = [
@@ -49,13 +50,31 @@ const MOCK_GOALS: Goal[] = [
 ];
 
 const App: React.FC = () => {
-  const [goals, setGoals] = useState<Goal[]>(MOCK_GOALS);
+  const [goals, setGoals] = useState<Goal[]>([]);
   const [isWizardOpen, setIsWizardOpen] = useState(false);
   const [filterAspect, setFilterAspect] = useState<LifeAspect | 'All'>('All');
   const [view, setView] = useState<'goals' | 'analytics' | 'schedule'>('goals');
   const [activeHabit, setActiveHabit] = useState<Habit | null>(null);
   const [isTimerOpen, setIsTimerOpen] = useState(false);
   const { user, loading } = useAuth();
+
+  useEffect(() => {
+    const loadGoals = async () => {
+      if (!user) {
+        setGoals([]);
+        return;
+      }
+
+      try {
+        const remoteGoals = await fetchUserGoals(user);
+        setGoals(remoteGoals);
+      } catch (error) {
+        console.error('Failed to load goals from Supabase', error);
+      }
+    };
+
+    void loadGoals();
+  }, [user]);
 
   const handleStartTimer = (habit: Habit) => {
     setActiveHabit(habit);
@@ -89,20 +108,50 @@ const App: React.FC = () => {
     setGoals(prev => [goal, ...prev]);
 
     if (user) {
-      await saveRecord(user, 'goal_created', {
-        id: goal.id,
-        title: goal.title,
-        aspect: goal.aspect,
-      });
+      try {
+        await Promise.all([
+          saveRecord(user, 'goal_created', {
+            id: goal.id,
+            title: goal.title,
+            aspect: goal.aspect,
+          }),
+          upsertUserGoal(user, goal),
+        ]);
+      } catch (error) {
+        console.error('Failed to persist new goal to Supabase', error);
+      }
     }
   };
 
   const handleUpdateGoal = (updatedGoal: Goal) => {
     setGoals(prev => prev.map(g => g.id === updatedGoal.id ? updatedGoal : g));
+
+    if (user) {
+      void Promise.all([
+        saveRecord(user, 'goal_updated', {
+          id: updatedGoal.id,
+          title: updatedGoal.title,
+          aspect: updatedGoal.aspect,
+          progress: updatedGoal.progress,
+        }),
+        upsertUserGoal(user, updatedGoal),
+      ]).catch((error) => {
+        console.error('Failed to persist goal update to Supabase', error);
+      });
+    }
   };
 
   const handleDeleteGoal = (id: string) => {
     setGoals(prev => prev.filter(g => g.id !== id));
+
+    if (user) {
+      void Promise.all([
+        saveRecord(user, 'goal_deleted', { id }),
+        deleteUserGoal(user, id),
+      ]).catch((error) => {
+        console.error('Failed to persist goal delete to Supabase', error);
+      });
+    }
   };
 
   const filteredGoals = useMemo(() => {
