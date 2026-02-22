@@ -82,47 +82,47 @@ const App: React.FC = () => {
 
   const handleTimerComplete = (habitId: string) => {
     const today = new Date().toISOString().split('T')[0];
-    
-    setGoals(prevGoals => prevGoals.map(goal => {
-      const habitIndex = goal.habits.findIndex(h => h.id === habitId);
-      if (habitIndex === -1) return goal;
 
-      const habit = goal.habits[habitIndex];
-      if (habit.completedDates.includes(today)) return goal;
+    const goal = goals.find(g => g.habits.some(h => h.id === habitId));
+    if (!goal) return;
 
-      const updatedHabit = {
+    const updatedHabits = goal.habits.map(habit => {
+      if (habit.id !== habitId) return habit;
+      if (habit.completedDates.includes(today)) return habit;
+
+      return {
         ...habit,
         completedDates: [...habit.completedDates, today],
-        streak: habit.streak + 1
+        streak: habit.streak + 1,
       };
+    });
 
-      const updatedHabits = [...goal.habits];
-      updatedHabits[habitIndex] = updatedHabit;
-
-      return { ...goal, habits: updatedHabits };
-    }));
+    const updatedGoal: Goal = { ...goal, habits: updatedHabits };
+    handleUpdateGoal(updatedGoal);
   };
 
   const handleToggleHabitCompletion = (habitId: string) => {
     const today = new Date().toISOString().split('T')[0];
 
-    setGoals(prevGoals =>
-      prevGoals.map(goal => {
-        let changed = false;
-        const habits = goal.habits.map(habit => {
-          if (habit.id !== habitId) return habit;
-          const isCompleted = habit.completedDates.includes(today);
-          const completedDates = isCompleted
-            ? habit.completedDates.filter(date => date !== today)
-            : [...habit.completedDates, today];
-          const streak = isCompleted ? Math.max(0, habit.streak - 1) : habit.streak + 1;
-          changed = true;
-          return { ...habit, completedDates, streak };
-        });
-        if (!changed) return goal;
-        return { ...goal, habits };
-      }),
-    );
+    const goal = goals.find(g => g.habits.some(h => h.id === habitId));
+    if (!goal) return;
+
+    let changed = false;
+    const updatedHabits = goal.habits.map(habit => {
+      if (habit.id !== habitId) return habit;
+      const isCompleted = habit.completedDates.includes(today);
+      const completedDates = isCompleted
+        ? habit.completedDates.filter(date => date !== today)
+        : [...habit.completedDates, today];
+      const streak = isCompleted ? Math.max(0, habit.streak - 1) : habit.streak + 1;
+      changed = true;
+      return { ...habit, completedDates, streak };
+    });
+
+    if (!changed) return;
+
+    const updatedGoal: Goal = { ...goal, habits: updatedHabits };
+    handleUpdateGoal(updatedGoal);
   };
 
   const handleUpdateHabitSchedule = (habitId: string, updates: Partial<Habit>) => {
