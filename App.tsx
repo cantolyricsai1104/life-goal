@@ -357,6 +357,7 @@ const App: React.FC = () => {
             onUpdateHabitSchedule={handleUpdateHabitSchedule}
             onCreateHabit={handleCreateHabitFromSchedule}
             onDeleteHabit={handleDeleteHabitFromSchedule}
+            onStartTimer={handleStartTimer}
           />
         )}
 

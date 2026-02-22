@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Goal, Habit, LifeAspect, ASPECT_COLORS, ASPECT_TEXT_COLORS } from '../types';
-import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Check, MoreHorizontal } from './Icons';
+import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Check, MoreHorizontal, Timer as TimerIcon } from './Icons';
 import { format, addDays, startOfWeek, isSameDay, parseISO } from 'date-fns';
 
 interface DailyScheduleProps {
@@ -9,6 +9,7 @@ interface DailyScheduleProps {
   onUpdateHabitSchedule: (habitId: string, updates: Partial<Habit>) => void;
   onCreateHabit: (timeOfDay: string, duration: number, title: string) => void;
   onDeleteHabit: (habitId: string) => void;
+  onStartTimer: (habit: Habit) => void;
 }
 
 type InteractionMode = 'move' | 'resize-top' | 'resize-bottom';
@@ -38,6 +39,7 @@ export const DailySchedule: React.FC<DailyScheduleProps> = ({
   onUpdateHabitSchedule,
   onCreateHabit,
   onDeleteHabit,
+  onStartTimer,
 }) => {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -451,9 +453,20 @@ export const DailySchedule: React.FC<DailyScheduleProps> = ({
                       {habit.title}
                     </span>
                     <span className="text-slate-500 text-[10px]">
-                      {timeOfDay} - {format(new Date().setHours(Math.floor(minutes / 60), (minutes % 60) + duration), 'h:mm a')}
+                      {format(new Date(0, 0, 0, Math.floor(minutes / 60), minutes % 60), 'h:mm a')} -{' '}
+                      {format(new Date(0, 0, 0, Math.floor((minutes + duration) / 60), (minutes + duration) % 60), 'h:mm a')}
                     </span>
                   </div>
+                  <button
+                    type="button"
+                    className="ml-2 flex items-center justify-center w-6 h-6 rounded-full bg-white/70 hover:bg-white shadow-sm"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onStartTimer(habit);
+                    }}
+                  >
+                    <TimerIcon className="w-3 h-3 text-slate-600" />
+                  </button>
                   {isCompleted && (
                     <div className={`rounded-full p-1 ${goalColor} text-white`}>
                         <Check className="w-3 h-3" />
