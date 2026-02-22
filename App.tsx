@@ -256,7 +256,7 @@ const App: React.FC = () => {
       </nav>
 
       <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="flex md:hidden bg-white p-1 rounded-xl shadow-sm border border-slate-200 mb-6">
+        <div className="flex md:hidden bg-white p-1 rounded-xl shadow-sm border border-slate-200 mb-4">
           <button
             onClick={() => setView('goals')}
             className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'goals' ? 'bg-violet-50 text-violet-700' : 'text-slate-500'}`}
@@ -270,6 +270,32 @@ const App: React.FC = () => {
             Schedule
           </button>
         </div>
+
+        {view === 'goals' && (
+          <div className="md:hidden bg-white p-5 rounded-2xl border border-slate-200 shadow-sm mb-6">
+            <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4">Life Aspects</h3>
+            <div className="space-y-1">
+              {(['All', ...Object.values(LifeAspect)] as const).map(aspect => (
+                <button
+                  key={aspect}
+                  onClick={() => setFilterAspect(aspect)}
+                  className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-all flex justify-between items-center ${
+                    filterAspect === aspect
+                      ? 'bg-slate-100 text-slate-900'
+                      : 'text-slate-500 hover:bg-slate-50'
+                  }`}
+                >
+                  {aspect}
+                  {aspect !== 'All' && (
+                    <span className="text-xs bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full">
+                      {goals.filter(g => g.aspect === aspect).length}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {view === 'schedule' && (
           <DailySchedule goals={goals} onToggleHabit={habitId => handleTimerComplete(habitId)} />
