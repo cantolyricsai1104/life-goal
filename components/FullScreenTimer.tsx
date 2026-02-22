@@ -36,6 +36,12 @@ interface MemoContextMenu {
   memoId?: string;
 }
 
+interface MemoDragState {
+  memoId: string;
+  offsetX: number;
+  offsetY: number;
+}
+
 export const FullScreenTimer: React.FC<FullScreenTimerProps> = ({
   isOpen,
   onClose,
@@ -47,6 +53,7 @@ export const FullScreenTimer: React.FC<FullScreenTimerProps> = ({
   const [isActive, setIsActive] = useState(false);
   const [memos, setMemos] = useState<Memo[]>([]);
   const [contextMenu, setContextMenu] = useState<MemoContextMenu | null>(null);
+  const [dragState, setDragState] = useState<MemoDragState | null>(null);
   const timerRef = useRef<number | null>(null);
 
   const createId = () => uuidv4();
@@ -101,6 +108,15 @@ export const FullScreenTimer: React.FC<FullScreenTimerProps> = ({
     setTimeLeft(prev => prev + 5 * 60);
   };
 
+  const handleMemoMouseDown = (memo: Memo, event: React.MouseEvent<HTMLDivElement>) => {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const offsetX = event.clientX - memo.x;
+    const offsetY = event.clientY - memo.y;
+    setDragState({ memoId: memo.id, offsetX, offsetY });
+  };
+
   const handleRootContextMenu = (event: React.MouseEvent<HTMLDivElement>) => {
     event.preventDefault();
     const targetElement = event.target as HTMLElement;
@@ -113,6 +129,45 @@ export const FullScreenTimer: React.FC<FullScreenTimerProps> = ({
       memoId: memoId || undefined,
     });
   };
+
+  useEffect(() => {
+    if (!dragState) return;
+
+    const handleMouseMove = (event: MouseEvent) => {
+      const x = event.clientX - dragState.offsetX;
+      const y = event.clientY - dragState.offsetY;
+      setMemos(prev =>
+        prev.map(memo =>
+          memo.id === dragState.memoId ? { ...memo, x, y } : memo
+        )
+      );
+    };
+
+    const handleMouseUp = () => {
+      let updated: Memo | null = null;
+      setMemos(prev =>
+        prev.map(memo => {
+          if (memo.id !== dragState.memoId) return memo;
+          updated = memo;
+          return memo;
+        })
+      );
+      if (user && habit && updated) {
+        void upsertUserTimerMemo(user, habit.id, updated.id, updated).catch((error) => {
+          console.error('Failed to persist timer memo position to Supabase', error);
+        });
+      }
+      setDragState(null);
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [dragState, user, habit]);
 
   const createMemo = (type: MemoType) => {
     if (!contextMenu) return;
@@ -334,7 +389,10 @@ export const FullScreenTimer: React.FC<FullScreenTimerProps> = ({
           }}
         >
           <div className="bg-white rounded-xl shadow-lg border border-slate-200 p-3 w-64 max-w-[80vw] space-y-2">
-            <div className="flex items-center justify-between">
+            <div
+              className="flex items-center justify-between cursor-move"
+              onMouseDown={event => handleMemoMouseDown(memo, event)}
+            >
               <span className="text-xs font-semibold text-slate-600">
                 {memo.type === 'text' ? 'Memo' : 'To-do'}
               </span>
