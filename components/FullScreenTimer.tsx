@@ -62,6 +62,8 @@ export const FullScreenTimer: React.FC<FullScreenTimerProps> = ({
   const [lastError, setLastError] = useState<string | null>(null);
   const [storageKeys, setStorageKeys] = useState<string[]>([]);
   const [storageBytes, setStorageBytes] = useState<number | null>(null);
+  const [localUpdatedAt, setLocalUpdatedAt] = useState<number | null>(null);
+  const [remoteUpdatedAt, setRemoteUpdatedAt] = useState<number | null>(null);
   const timerRef = useRef<number | null>(null);
 
   const createId = () => uuidv4();
@@ -125,8 +127,10 @@ export const FullScreenTimer: React.FC<FullScreenTimerProps> = ({
     if (typeof window === 'undefined') return;
     try {
       const key = getStorageKey(habitId);
-      window.localStorage.setItem(key, JSON.stringify(nextMemos));
-      setLastPersistAt(Date.now());
+      const updatedAt = Date.now();
+      window.localStorage.setItem(key, JSON.stringify({ updatedAt, memos: nextMemos }));
+      setLastPersistAt(updatedAt);
+      setLocalUpdatedAt(updatedAt);
       const raw = window.localStorage.getItem(key);
       setStorageBytes(raw ? raw.length : 0);
       const keys = Object.keys(window.localStorage)
@@ -157,13 +161,22 @@ export const FullScreenTimer: React.FC<FullScreenTimerProps> = ({
           const raw = window.localStorage.getItem(storageKey);
           if (!raw) continue;
           try {
-            const parsed = JSON.parse(raw) as Memo[];
-            const { next, changed } = normalizeMemos(parsed);
+            const parsed = JSON.parse(raw) as { updatedAt?: number; memos?: Memo[] } | Memo[];
+            const memosRaw = Array.isArray(parsed) ? parsed : parsed.memos ?? [];
+            const { next, changed } = normalizeMemos(memosRaw);
             setMemos(next);
             loadedFromStorage = true;
             setLastLoadSource(`localStorage:${storageKey}`);
-            if (storageKey !== key || changed) {
-              window.localStorage.setItem(key, JSON.stringify(next));
+            if (!Array.isArray(parsed) && typeof parsed.updatedAt === 'number') {
+              setLocalUpdatedAt(parsed.updatedAt);
+            } else {
+              setLocalUpdatedAt(null);
+            }
+            if (storageKey !== key || changed || Array.isArray(parsed)) {
+              const updatedAt = typeof parsed === 'object' && !Array.isArray(parsed) && typeof parsed.updatedAt === 'number'
+                ? parsed.updatedAt
+                : Date.now();
+              window.localStorage.setItem(key, JSON.stringify({ updatedAt, memos: next }));
             }
             break;
           } catch (error) {
@@ -186,14 +199,24 @@ export const FullScreenTimer: React.FC<FullScreenTimerProps> = ({
       if (user) {
         void fetchUserTimerMemos(user, habit.id)
           .then((stored) => {
-            const remote = (stored as Memo[]) ?? [];
+            const payloads = stored ?? [];
+            const remote = payloads.map((row) => row.payload) as Memo[];
+            const latestRemote = payloads.reduce<number | null>((acc, row) => {
+              if (!row.updated_at) return acc;
+              const value = Date.parse(row.updated_at);
+              if (Number.isNaN(value)) return acc;
+              return acc === null ? value : Math.max(acc, value);
+            }, null);
             if (remote.length > 0) {
-              const { next } = normalizeMemos(remote);
-              setMemos(next);
-              persistMemosToStorage(habit.id, next);
+              if (!localUpdatedAt || !latestRemote || latestRemote >= localUpdatedAt) {
+                const { next } = normalizeMemos(remote);
+                setMemos(next);
+                persistMemosToStorage(habit.id, next);
+              }
             }
             setLastRemoteStatus(`remote:${remote.length}`);
             setLastRemoteAt(Date.now());
+            setRemoteUpdatedAt(latestRemote);
           })
           .catch((error) => {
             const message = error instanceof Error ? error.message : String(error);
@@ -708,6 +731,8 @@ export const FullScreenTimer: React.FC<FullScreenTimerProps> = ({
             <div>lastPersistAt: {lastPersistAt ? new Date(lastPersistAt).toLocaleTimeString() : 'none'}</div>
             <div>lastRemoteStatus: {lastRemoteStatus ?? 'none'}</div>
             <div>lastRemoteAt: {lastRemoteAt ? new Date(lastRemoteAt).toLocaleTimeString() : 'none'}</div>
+            <div>localUpdatedAt: {localUpdatedAt ? new Date(localUpdatedAt).toLocaleTimeString() : 'none'}</div>
+            <div>remoteUpdatedAt: {remoteUpdatedAt ? new Date(remoteUpdatedAt).toLocaleTimeString() : 'none'}</div>
             <div>lastError: {lastError ?? 'none'}</div>
           </div>
           {memos.length > 0 && (

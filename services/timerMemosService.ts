@@ -10,14 +10,17 @@ type TimerMemoRow = {
   updated_at: string
 }
 
-export async function fetchUserTimerMemos(user: User, habitId: string) {
+export async function fetchUserTimerMemos(
+  user: User,
+  habitId: string
+): Promise<{ payload: unknown; updated_at: string | null }[]> {
   if (!isSupabaseConfigured || !supabase) {
     return []
   }
 
   const { data, error } = await supabase
     .from('app_timer_memos')
-    .select('payload')
+    .select('payload, updated_at')
     .eq('user_id', user.id)
     .eq('habit_id', habitId)
     .order('created_at', { ascending: true })
@@ -26,8 +29,7 @@ export async function fetchUserTimerMemos(user: User, habitId: string) {
     throw error
   }
 
-  const rows = (data ?? []) as { payload: unknown }[]
-  return rows.map((row) => row.payload)
+  return (data ?? []) as { payload: unknown; updated_at: string | null }[]
 }
 
 export async function upsertUserTimerMemo(user: User, habitId: string, memoId: string, payload: unknown) {
@@ -40,6 +42,7 @@ export async function upsertUserTimerMemo(user: User, habitId: string, memoId: s
     user_id: user.id,
     habit_id: habitId,
     payload,
+    updated_at: new Date().toISOString(),
   })
 
   if (error) {
@@ -63,4 +66,3 @@ export async function deleteUserTimerMemo(user: User, habitId: string, memoId: s
     throw error
   }
 }
-
