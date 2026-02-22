@@ -6,8 +6,8 @@ import { GoalWizard } from './components/GoalWizard';
 import { FullScreenTimer } from './components/FullScreenTimer';
 import { DailySchedule } from './components/DailySchedule';
 import { SupabaseGoalsDemo } from './components/SupabaseGoalsDemo';
-import { AuthPanel } from './components/AuthPanel';
 import { UserHistoryPanel } from './components/UserHistoryPanel';
+import { LandingPage } from './components/LandingPage';
 import { useAuth } from './contexts/AuthContext';
 import { saveRecord } from './services/recordsService';
 import { v4 as uuidv4 } from 'uuid';
@@ -55,7 +55,7 @@ const App: React.FC = () => {
   const [view, setView] = useState<'goals' | 'analytics' | 'schedule'>('goals');
   const [activeHabit, setActiveHabit] = useState<Habit | null>(null);
   const [isTimerOpen, setIsTimerOpen] = useState(false);
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
 
   const handleStartTimer = (habit: Habit) => {
     setActiveHabit(habit);
@@ -121,6 +121,18 @@ const App: React.FC = () => {
     return goals.reduce((acc, goal) => acc + goal.habits.length, 0);
   }, [goals]);
 
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-slate-50 text-slate-900 flex items-center justify-center">
+        <div className="text-slate-500 text-sm">Loading...</div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <LandingPage />;
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 pb-20 md:pb-0">
       
@@ -149,13 +161,8 @@ const App: React.FC = () => {
         </div>
       </nav>
 
-      {/* Main Layout */}
       <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         
-        <div className="mb-4 max-w-md">
-          <AuthPanel />
-        </div>
-
         {/* Mobile View Switcher */}
         <div className="flex md:hidden bg-white p-1 rounded-xl shadow-sm border border-slate-200 mb-6">
           <button 
