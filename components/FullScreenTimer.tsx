@@ -54,6 +54,12 @@ export const FullScreenTimer: React.FC<FullScreenTimerProps> = ({
   const [memos, setMemos] = useState<Memo[]>([]);
   const [contextMenu, setContextMenu] = useState<MemoContextMenu | null>(null);
   const [dragState, setDragState] = useState<MemoDragState | null>(null);
+  const [debugOpen, setDebugOpen] = useState(false);
+  const [lastPersistAt, setLastPersistAt] = useState<number | null>(null);
+  const [lastLoadSource, setLastLoadSource] = useState<string | null>(null);
+  const [lastRemoteStatus, setLastRemoteStatus] = useState<string | null>(null);
+  const [lastRemoteAt, setLastRemoteAt] = useState<number | null>(null);
+  const [lastError, setLastError] = useState<string | null>(null);
   const timerRef = useRef<number | null>(null);
 
   const createId = () => uuidv4();
@@ -67,7 +73,10 @@ export const FullScreenTimer: React.FC<FullScreenTimerProps> = ({
     try {
       const key = getStorageKey(habitId);
       window.localStorage.setItem(key, JSON.stringify(nextMemos));
+      setLastPersistAt(Date.now());
     } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setLastError(message);
       console.error('Failed to persist timer memos to localStorage', error);
     }
   };
@@ -92,16 +101,20 @@ export const FullScreenTimer: React.FC<FullScreenTimerProps> = ({
             const parsed = JSON.parse(raw) as Memo[];
             setMemos(parsed);
             loadedFromStorage = true;
+            setLastLoadSource(`localStorage:${storageKey}`);
             if (storageKey !== key) {
               window.localStorage.setItem(key, raw);
             }
             break;
           } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            setLastError(message);
             console.error('Failed to parse timer memos from localStorage', error);
           }
         }
         if (!loadedFromStorage) {
           setMemos([]);
+          setLastLoadSource('localStorage:empty');
         }
       }
       if (user) {
@@ -112,8 +125,14 @@ export const FullScreenTimer: React.FC<FullScreenTimerProps> = ({
               setMemos(remote);
               persistMemosToStorage(habit.id, remote);
             }
+            setLastRemoteStatus(`remote:${remote.length}`);
+            setLastRemoteAt(Date.now());
           })
           .catch((error) => {
+            const message = error instanceof Error ? error.message : String(error);
+            setLastRemoteStatus('remote:error');
+            setLastRemoteAt(Date.now());
+            setLastError(message);
             console.error('Failed to load timer memos from Supabase', error);
           });
       }
@@ -383,9 +402,18 @@ export const FullScreenTimer: React.FC<FullScreenTimerProps> = ({
            {/* Icon could go here */}
            <span className="font-semibold text-lg text-slate-800">{habit.title}</span>
         </div>
-        <button className="p-2 rounded-full hover:bg-black/5 transition-colors">
-          <MoreHorizontal className="w-6 h-6 text-slate-800" />
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setDebugOpen(prev => !prev)}
+            className="text-xs font-semibold px-3 py-1.5 rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200"
+          >
+            Debug
+          </button>
+          <button className="p-2 rounded-full hover:bg-black/5 transition-colors">
+            <MoreHorizontal className="w-6 h-6 text-slate-800" />
+          </button>
+        </div>
       </div>
 
       <div className="relative flex items-center justify-center mt-10">
@@ -566,6 +594,31 @@ export const FullScreenTimer: React.FC<FullScreenTimerProps> = ({
                 Delete memo
               </button>
             )}
+          </div>
+        </div>
+      )}
+      {debugOpen && (
+        <div className="fixed bottom-4 left-4 z-[60] w-[320px] max-w-[90vw] rounded-xl border border-slate-200 bg-white/95 shadow-lg p-3 text-xs text-slate-700">
+          <div className="flex items-center justify-between mb-2">
+            <span className="font-semibold text-slate-800">Memo Debug</span>
+            <button
+              type="button"
+              onClick={() => setDebugOpen(false)}
+              className="text-slate-500 hover:text-slate-800"
+            >
+              Close
+            </button>
+          </div>
+          <div className="space-y-1">
+            <div>habitId: {habit.id}</div>
+            <div>userId: {user?.id ?? 'none'}</div>
+            <div>storageKey: {getStorageKey(habit.id)}</div>
+            <div>memos: {memos.length}</div>
+            <div>lastLoadSource: {lastLoadSource ?? 'none'}</div>
+            <div>lastPersistAt: {lastPersistAt ? new Date(lastPersistAt).toLocaleTimeString() : 'none'}</div>
+            <div>lastRemoteStatus: {lastRemoteStatus ?? 'none'}</div>
+            <div>lastRemoteAt: {lastRemoteAt ? new Date(lastRemoteAt).toLocaleTimeString() : 'none'}</div>
+            <div>lastError: {lastError ?? 'none'}</div>
           </div>
         </div>
       )}
