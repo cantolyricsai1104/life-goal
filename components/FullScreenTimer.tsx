@@ -72,6 +72,26 @@ export const FullScreenTimer: React.FC<FullScreenTimerProps> = ({
     return `timer-memos:${habitId}`;
   };
 
+  const getLocalSnapshot = (habitId: string) => {
+    if (typeof window === 'undefined') {
+      return { updatedAt: null as number | null, memos: [] as Memo[] };
+    }
+    const key = getStorageKey(habitId);
+    const raw = window.localStorage.getItem(key);
+    if (!raw) {
+      return { updatedAt: null as number | null, memos: [] as Memo[] };
+    }
+    try {
+      const parsed = JSON.parse(raw) as { updatedAt?: number; memos?: Memo[] } | Memo[];
+      if (Array.isArray(parsed)) {
+        return { updatedAt: null, memos: parsed };
+      }
+      return { updatedAt: typeof parsed.updatedAt === 'number' ? parsed.updatedAt : null, memos: parsed.memos ?? [] };
+    } catch {
+      return { updatedAt: null as number | null, memos: [] as Memo[] };
+    }
+  };
+
   const clamp = (value: number, min: number, max: number) => {
     return Math.min(max, Math.max(min, value));
   };
@@ -208,7 +228,11 @@ export const FullScreenTimer: React.FC<FullScreenTimerProps> = ({
               return acc === null ? value : Math.max(acc, value);
             }, null);
             if (remote.length > 0) {
-              if (!localUpdatedAt || !latestRemote || latestRemote >= localUpdatedAt) {
+              const snapshot = getLocalSnapshot(habit.id);
+              if (typeof snapshot.updatedAt === 'number') {
+                setLocalUpdatedAt(snapshot.updatedAt);
+              }
+              if (!snapshot.updatedAt || !latestRemote || latestRemote >= snapshot.updatedAt) {
                 const { next } = normalizeMemos(remote);
                 setMemos(next);
                 persistMemosToStorage(habit.id, next);
