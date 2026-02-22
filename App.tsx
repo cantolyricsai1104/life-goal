@@ -115,14 +115,14 @@ const App: React.FC = () => {
     handleUpdateGoal(updatedGoal);
   };
 
-  const handleCreateHabitFromSchedule = (timeOfDay: string, duration: number) => {
+  const handleCreateHabitFromSchedule = (timeOfDay: string, duration: number, title: string) => {
     if (goals.length === 0) return;
 
     const targetGoal = goals[0];
 
     const newHabit: Habit = {
       id: uuidv4(),
-      title: 'New Task',
+      title,
       frequency: 'daily',
       completedDates: [],
       streak: 0,

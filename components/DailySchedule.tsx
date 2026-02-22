@@ -7,7 +7,7 @@ interface DailyScheduleProps {
   goals: Goal[];
   onToggleHabit: (habitId: string) => void;
   onUpdateHabitSchedule: (habitId: string, updates: Partial<Habit>) => void;
-  onCreateHabit: (timeOfDay: string, duration: number) => void;
+  onCreateHabit: (timeOfDay: string, duration: number, title: string) => void;
   onDeleteHabit: (habitId: string) => void;
 }
 
@@ -19,6 +19,17 @@ interface InteractionState {
   startY: number;
   startMinutes: number;
   startDuration: number;
+}
+
+type ContextTarget = 'empty' | 'event';
+
+interface ContextMenuState {
+  target: ContextTarget;
+  habitId?: string;
+  minutes: number;
+  x: number;
+  y: number;
+  name: string;
 }
 
 export const DailySchedule: React.FC<DailyScheduleProps> = ({
@@ -33,6 +44,7 @@ export const DailySchedule: React.FC<DailyScheduleProps> = ({
   const timelineRef = useRef<HTMLDivElement>(null);
   const [interaction, setInteraction] = useState<InteractionState | null>(null);
   const [tempEdits, setTempEdits] = useState<Record<string, { timeOfDay: string; duration: number }>>({});
+  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
 
   // Generate days for the week view
   const weekDays = useMemo(() => {
@@ -205,16 +217,66 @@ export const DailySchedule: React.FC<DailyScheduleProps> = ({
     };
   }, [interaction, onUpdateHabitSchedule, tempEdits]);
 
-  const handleTimelineClick = (event: React.MouseEvent<HTMLDivElement>) => {
+  const handleTimelineContextMenu = (event: React.MouseEvent<HTMLDivElement>) => {
+    event.preventDefault();
     if (!timelineRef.current) return;
     const rect = timelineRef.current.getBoundingClientRect();
     const y = event.clientY - rect.top;
     const minutes = snapMinutes(y);
     const maxStart = 24 * 60 - 60;
     const startMinutes = Math.max(0, Math.min(maxStart, minutes));
-    const timeOfDay = minutesToTime(startMinutes);
-    onCreateHabit(timeOfDay, 60);
+    setContextMenu({
+      target: 'empty',
+      minutes: startMinutes,
+      x: event.clientX,
+      y: event.clientY,
+      name: 'New Task',
+    });
   };
+
+  const closeContextMenu = () => {
+    setContextMenu(null);
+  };
+
+  const handleContextNameChange = (value: string) => {
+    if (!contextMenu) return;
+    setContextMenu({ ...contextMenu, name: value });
+  };
+
+  const handleCreateFromContext = () => {
+    if (!contextMenu || contextMenu.target !== 'empty') return;
+    const timeOfDay = minutesToTime(contextMenu.minutes);
+    const title = contextMenu.name.trim() || 'New Task';
+    onCreateHabit(timeOfDay, 60, title);
+    setContextMenu(null);
+  };
+
+  const handleDeleteFromContext = () => {
+    if (!contextMenu || contextMenu.target !== 'event' || !contextMenu.habitId) return;
+    onDeleteHabit(contextMenu.habitId);
+    setContextMenu(null);
+  };
+
+  const handleRenameFromContext = () => {
+    if (!contextMenu || contextMenu.target !== 'event' || !contextMenu.habitId) return;
+    const title = contextMenu.name.trim();
+    if (!title) return;
+    onUpdateHabitSchedule(contextMenu.habitId, { title });
+    setContextMenu(null);
+  };
+
+  useEffect(() => {
+    if (!contextMenu) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setContextMenu(null);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [contextMenu]);
 
   // Group habits by hour to avoid overlap or just list them
   // For the timeline view, we want to place them at specific vertical positions
@@ -295,7 +357,7 @@ export const DailySchedule: React.FC<DailyScheduleProps> = ({
         <div
           ref={timelineRef}
           className="relative min-h-[1440px]"
-          onClick={handleTimelineClick}
+          onContextMenu={handleTimelineContextMenu}
         >
           {hours.map(hour => (
             <div key={hour} className="absolute w-full flex" style={{ top: `${hour * 60}px`, height: '60px' }}>
@@ -342,6 +404,19 @@ export const DailySchedule: React.FC<DailyScheduleProps> = ({
               startInteraction(habit.id, mode, event.clientY, minutes, duration);
             };
 
+            const handleEventContextMenu = (event: React.MouseEvent<HTMLDivElement>) => {
+              event.preventDefault();
+              event.stopPropagation();
+              setContextMenu({
+                target: 'event',
+                habitId: habit.id,
+                minutes,
+                x: event.clientX,
+                y: event.clientY,
+                name: habit.title,
+              });
+            };
+
             return (
               <div
                 key={habit.id}
@@ -356,6 +431,7 @@ export const DailySchedule: React.FC<DailyScheduleProps> = ({
                   zIndex: 10
                 }}
                 onMouseDown={handleEventMouseDown}
+                onContextMenu={handleEventContextMenu}
                 onDoubleClick={(event) => {
                   event.stopPropagation();
                   onToggleHabit(habit.id);
@@ -378,16 +454,6 @@ export const DailySchedule: React.FC<DailyScheduleProps> = ({
                       {timeOfDay} - {format(new Date().setHours(Math.floor(minutes / 60), (minutes % 60) + duration), 'h:mm a')}
                     </span>
                   </div>
-                  <button
-                    type="button"
-                    className="ml-2 text-slate-400 hover:text-slate-600"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      onDeleteHabit(habit.id);
-                    }}
-                  >
-                    <MoreHorizontal className="w-4 h-4" />
-                  </button>
                   {isCompleted && (
                     <div className={`rounded-full p-1 ${goalColor} text-white`}>
                         <Check className="w-3 h-3" />
@@ -399,6 +465,53 @@ export const DailySchedule: React.FC<DailyScheduleProps> = ({
           })}
         </div>
       </div>
+      {contextMenu && (
+        <div
+          className="fixed inset-0 z-40"
+          onClick={closeContextMenu}
+        >
+          <div
+            className="absolute bg-white rounded-xl shadow-lg border border-slate-200 p-3 w-56 space-y-3"
+            style={{ top: contextMenu.y, left: contextMenu.x }}
+            onClick={event => event.stopPropagation()}
+          >
+            <input
+              autoFocus
+              value={contextMenu.name}
+              onChange={event => handleContextNameChange(event.target.value)}
+              className="w-full border border-slate-200 rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-violet-500"
+              placeholder="Task name"
+            />
+            {contextMenu.target === 'empty' && (
+              <button
+                type="button"
+                onClick={handleCreateFromContext}
+                className="w-full text-sm font-medium px-3 py-1.5 rounded-md bg-violet-600 text-white hover:bg-violet-700"
+              >
+                Create task here
+              </button>
+            )}
+            {contextMenu.target === 'event' && (
+              <div className="space-y-2">
+                <button
+                  type="button"
+                  onClick={handleRenameFromContext}
+                  className="w-full text-sm font-medium px-3 py-1.5 rounded-md bg-slate-900 text-white hover:bg-slate-800"
+                >
+                  Rename task
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDeleteFromContext}
+                  className="w-full text-sm font-medium px-3 py-1.5 rounded-md bg-red-50 text-red-600 hover:bg-red-100"
+                >
+                  Delete task
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
