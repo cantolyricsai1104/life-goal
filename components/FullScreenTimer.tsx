@@ -58,20 +58,53 @@ export const FullScreenTimer: React.FC<FullScreenTimerProps> = ({
 
   const createId = () => uuidv4();
 
+  const getStorageKey = (habitId: string) => {
+    const userKey = user ? user.id : 'anon';
+    return `timer-memos:${userKey}:${habitId}`;
+  };
+
+  const persistMemosToStorage = (habitId: string, nextMemos: Memo[]) => {
+    if (typeof window === 'undefined') return;
+    try {
+      const key = getStorageKey(habitId);
+      window.localStorage.setItem(key, JSON.stringify(nextMemos));
+    } catch (error) {
+      console.error('Failed to persist timer memos to localStorage', error);
+    }
+  };
+
   useEffect(() => {
     if (isOpen && habit) {
       setTimeLeft((habit.recommendedDuration || 30) * 60);
       setIsActive(false);
+      let loadedFromStorage = false;
+      if (typeof window !== 'undefined') {
+        const key = getStorageKey(habit.id);
+        const raw = window.localStorage.getItem(key);
+        if (raw) {
+          try {
+            const parsed = JSON.parse(raw) as Memo[];
+            setMemos(parsed);
+            loadedFromStorage = true;
+          } catch (error) {
+            console.error('Failed to parse timer memos from localStorage', error);
+          }
+        } else {
+          setMemos([]);
+        }
+      }
       if (user) {
         void fetchUserTimerMemos(user, habit.id)
           .then((stored) => {
-            setMemos((stored as Memo[]) ?? []);
+            const remote = (stored as Memo[]) ?? [];
+            if (remote.length > 0 || !loadedFromStorage) {
+              setMemos(remote);
+              persistMemosToStorage(habit.id, remote);
+            }
           })
           .catch((error) => {
             console.error('Failed to load timer memos from Supabase', error);
           });
-      } else {
-        setMemos([]);
       }
     } else if (!isOpen) {
       setMemos([]);
@@ -136,22 +169,30 @@ export const FullScreenTimer: React.FC<FullScreenTimerProps> = ({
     const handleMouseMove = (event: MouseEvent) => {
       const x = event.clientX - dragState.offsetX;
       const y = event.clientY - dragState.offsetY;
-      setMemos(prev =>
-        prev.map(memo =>
+      setMemos(prev => {
+        const next = prev.map(memo =>
           memo.id === dragState.memoId ? { ...memo, x, y } : memo
-        )
-      );
+        );
+        if (habit) {
+          persistMemosToStorage(habit.id, next);
+        }
+        return next;
+      });
     };
 
     const handleMouseUp = () => {
       let updated: Memo | null = null;
-      setMemos(prev =>
-        prev.map(memo => {
+      setMemos(prev => {
+        const next = prev.map(memo => {
           if (memo.id !== dragState.memoId) return memo;
           updated = memo;
           return memo;
-        })
-      );
+        });
+        if (habit) {
+          persistMemosToStorage(habit.id, next);
+        }
+        return next;
+      });
       if (user && habit && updated) {
         void upsertUserTimerMemo(user, habit.id, updated.id, updated).catch((error) => {
           console.error('Failed to persist timer memo position to Supabase', error);
@@ -179,7 +220,13 @@ export const FullScreenTimer: React.FC<FullScreenTimerProps> = ({
       text: '',
       items: type === 'todo' ? [{ id: createId(), text: '', done: false }] : [],
     };
-    setMemos(prev => [...prev, newMemo]);
+    setMemos(prev => {
+      const next = [...prev, newMemo];
+      if (habit) {
+        persistMemosToStorage(habit.id, next);
+      }
+      return next;
+    });
     if (user && habit) {
       void upsertUserTimerMemo(user, habit.id, newMemo.id, newMemo).catch((error) => {
         console.error('Failed to persist timer memo to Supabase', error);
@@ -189,7 +236,13 @@ export const FullScreenTimer: React.FC<FullScreenTimerProps> = ({
   };
 
   const deleteMemo = (memoId: string) => {
-    setMemos(prev => prev.filter(memo => memo.id !== memoId));
+    setMemos(prev => {
+      const next = prev.filter(memo => memo.id !== memoId);
+      if (habit) {
+        persistMemosToStorage(habit.id, next);
+      }
+      return next;
+    });
     if (user && habit) {
       void deleteUserTimerMemo(user, habit.id, memoId).catch((error) => {
         console.error('Failed to delete timer memo from Supabase', error);
@@ -200,14 +253,18 @@ export const FullScreenTimer: React.FC<FullScreenTimerProps> = ({
 
   const updateMemoText = (memoId: string, text: string) => {
     let updated: Memo | null = null;
-    setMemos(prev =>
-      prev.map(memo => {
+    setMemos(prev => {
+      const next = prev.map(memo => {
         if (memo.id !== memoId) return memo;
-        const next = { ...memo, text };
-        updated = next;
-        return next;
-      })
-    );
+        const value = { ...memo, text };
+        updated = value;
+        return value;
+      });
+      if (habit) {
+        persistMemosToStorage(habit.id, next);
+      }
+      return next;
+    });
     if (user && habit && updated) {
       void upsertUserTimerMemo(user, habit.id, memoId, updated).catch((error) => {
         console.error('Failed to persist timer memo update to Supabase', error);
@@ -217,19 +274,23 @@ export const FullScreenTimer: React.FC<FullScreenTimerProps> = ({
 
   const updateTodoText = (memoId: string, itemId: string, text: string) => {
     let updated: Memo | null = null;
-    setMemos(prev =>
-      prev.map(memo => {
+    setMemos(prev => {
+      const next = prev.map(memo => {
         if (memo.id !== memoId) return memo;
-        const next: Memo = {
+        const value: Memo = {
           ...memo,
           items: memo.items.map(item =>
             item.id === itemId ? { ...item, text } : item
           ),
         };
-        updated = next;
-        return next;
-      })
-    );
+        updated = value;
+        return value;
+      });
+      if (habit) {
+        persistMemosToStorage(habit.id, next);
+      }
+      return next;
+    });
     if (user && habit && updated) {
       void upsertUserTimerMemo(user, habit.id, memoId, updated).catch((error) => {
         console.error('Failed to persist timer memo update to Supabase', error);
@@ -239,19 +300,23 @@ export const FullScreenTimer: React.FC<FullScreenTimerProps> = ({
 
   const toggleTodoItem = (memoId: string, itemId: string) => {
     let updated: Memo | null = null;
-    setMemos(prev =>
-      prev.map(memo => {
+    setMemos(prev => {
+      const next = prev.map(memo => {
         if (memo.id !== memoId) return memo;
-        const next: Memo = {
+        const value: Memo = {
           ...memo,
           items: memo.items.map(item =>
             item.id === itemId ? { ...item, done: !item.done } : item
           ),
         };
-        updated = next;
-        return next;
-      })
-    );
+        updated = value;
+        return value;
+      });
+      if (habit) {
+        persistMemosToStorage(habit.id, next);
+      }
+      return next;
+    });
     if (user && habit && updated) {
       void upsertUserTimerMemo(user, habit.id, memoId, updated).catch((error) => {
         console.error('Failed to persist timer memo update to Supabase', error);
@@ -262,17 +327,21 @@ export const FullScreenTimer: React.FC<FullScreenTimerProps> = ({
   const addTodoItem = (memoId: string) => {
     let updated: Memo | null = null;
     const newItem: MemoTodoItem = { id: createId(), text: '', done: false };
-    setMemos(prev =>
-      prev.map(memo => {
+    setMemos(prev => {
+      const next = prev.map(memo => {
         if (memo.id !== memoId) return memo;
-        const next: Memo = {
+        const value: Memo = {
           ...memo,
           items: [...memo.items, newItem],
         };
-        updated = next;
-        return next;
-      })
-    );
+        updated = value;
+        return value;
+      });
+      if (habit) {
+        persistMemosToStorage(habit.id, next);
+      }
+      return next;
+    });
     if (user && habit && updated) {
       void upsertUserTimerMemo(user, habit.id, memoId, updated).catch((error) => {
         console.error('Failed to persist timer memo update to Supabase', error);
