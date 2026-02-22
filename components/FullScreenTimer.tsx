@@ -70,6 +70,57 @@ export const FullScreenTimer: React.FC<FullScreenTimerProps> = ({
     return `timer-memos:${habitId}`;
   };
 
+  const clamp = (value: number, min: number, max: number) => {
+    return Math.min(max, Math.max(min, value));
+  };
+
+  const normalizeMemoPosition = (memo: Memo) => {
+    if (typeof window === 'undefined') return memo;
+    const memoWidth = 260;
+    const memoHeight = memo.type === 'todo' ? 240 : 180;
+    const minX = memoWidth / 2 + 8;
+    const maxX = window.innerWidth - memoWidth / 2 - 8;
+    const minY = memoHeight / 2 + 8;
+    const maxY = window.innerHeight - memoHeight / 2 - 8;
+    const centerX = window.innerWidth / 2;
+    const centerY = window.innerHeight / 2;
+    const xRaw = Number.isFinite(memo.x) ? memo.x : centerX;
+    const yRaw = Number.isFinite(memo.y) ? memo.y : centerY;
+    const x = maxX >= minX ? clamp(xRaw, minX, maxX) : centerX;
+    const y = maxY >= minY ? clamp(yRaw, minY, maxY) : centerY;
+    return { ...memo, x, y };
+  };
+
+  const normalizeMemos = (list: Memo[]) => {
+    const next = list.map(normalizeMemoPosition);
+    const changed = next.some((memo, index) => {
+      const original = list[index];
+      return memo.x !== original?.x || memo.y !== original?.y;
+    });
+    return { next, changed };
+  };
+
+  const recenterMemos = () => {
+    if (!habit || typeof window === 'undefined') return;
+    const centerX = window.innerWidth / 2;
+    const centerY = window.innerHeight / 2;
+    const step = 24;
+    const next = memos.map((memo, index) => ({
+      ...memo,
+      x: centerX + (index % 2 === 0 ? -1 : 1) * Math.min(4, index + 1) * step,
+      y: centerY + index * step,
+    }));
+    setMemos(next);
+    persistMemosToStorage(habit.id, next);
+    if (user) {
+      next.forEach((memo) => {
+        void upsertUserTimerMemo(user, habit.id, memo.id, memo).catch((error) => {
+          console.error('Failed to persist timer memo update to Supabase', error);
+        });
+      });
+    }
+  };
+
   const persistMemosToStorage = (habitId: string, nextMemos: Memo[]) => {
     if (typeof window === 'undefined') return;
     try {
@@ -107,11 +158,12 @@ export const FullScreenTimer: React.FC<FullScreenTimerProps> = ({
           if (!raw) continue;
           try {
             const parsed = JSON.parse(raw) as Memo[];
-            setMemos(parsed);
+            const { next, changed } = normalizeMemos(parsed);
+            setMemos(next);
             loadedFromStorage = true;
             setLastLoadSource(`localStorage:${storageKey}`);
-            if (storageKey !== key) {
-              window.localStorage.setItem(key, raw);
+            if (storageKey !== key || changed) {
+              window.localStorage.setItem(key, JSON.stringify(next));
             }
             break;
           } catch (error) {
@@ -136,8 +188,9 @@ export const FullScreenTimer: React.FC<FullScreenTimerProps> = ({
           .then((stored) => {
             const remote = (stored as Memo[]) ?? [];
             if (remote.length > 0) {
-              setMemos(remote);
-              persistMemosToStorage(habit.id, remote);
+              const { next } = normalizeMemos(remote);
+              setMemos(next);
+              persistMemosToStorage(habit.id, next);
             }
             setLastRemoteStatus(`remote:${remote.length}`);
             setLastRemoteAt(Date.now());
@@ -626,13 +679,22 @@ export const FullScreenTimer: React.FC<FullScreenTimerProps> = ({
         <div className="fixed bottom-4 left-4 z-[60] w-[320px] max-w-[90vw] rounded-xl border border-slate-200 bg-white/95 shadow-lg p-3 text-xs text-slate-700">
           <div className="flex items-center justify-between mb-2">
             <span className="font-semibold text-slate-800">Memo Debug</span>
-            <button
-              type="button"
-              onClick={() => setDebugOpen(false)}
-              className="text-slate-500 hover:text-slate-800"
-            >
-              Close
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={recenterMemos}
+                className="text-slate-600 hover:text-slate-900"
+              >
+                Recenter
+              </button>
+              <button
+                type="button"
+                onClick={() => setDebugOpen(false)}
+                className="text-slate-500 hover:text-slate-800"
+              >
+                Close
+              </button>
+            </div>
           </div>
           <div className="space-y-1">
             <div>habitId: {habit.id}</div>
@@ -648,6 +710,15 @@ export const FullScreenTimer: React.FC<FullScreenTimerProps> = ({
             <div>lastRemoteAt: {lastRemoteAt ? new Date(lastRemoteAt).toLocaleTimeString() : 'none'}</div>
             <div>lastError: {lastError ?? 'none'}</div>
           </div>
+          {memos.length > 0 && (
+            <div className="mt-2 max-h-32 overflow-y-auto space-y-1 text-[10px] text-slate-500">
+              {memos.map((memo, index) => (
+                <div key={memo.id}>
+                  {index + 1}. {memo.type} x:{Math.round(memo.x)} y:{Math.round(memo.y)} text:{memo.text.length} items:{memo.items.length}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>
