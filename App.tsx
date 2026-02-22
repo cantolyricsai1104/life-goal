@@ -54,6 +54,7 @@ const App: React.FC = () => {
   const [view, setView] = useState<'goals' | 'schedule'>('goals');
   const [activeHabit, setActiveHabit] = useState<Habit | null>(null);
   const [isTimerOpen, setIsTimerOpen] = useState(false);
+  const [isLifeAspectsOpen, setIsLifeAspectsOpen] = useState(false);
   const { user, loading } = useAuth();
 
   useEffect(() => {
@@ -193,43 +194,52 @@ const App: React.FC = () => {
 
           <div className="hidden md:flex flex-1 justify-center">
             <div className="bg-slate-100 p-1 rounded-xl shadow-sm border border-slate-200 flex items-center gap-1">
-              <div className="relative group">
+              <div className="relative">
                 <button
-                  onClick={() => setView('goals')}
+                  onClick={() => {
+                    setView('goals');
+                    setIsLifeAspectsOpen(prev => !prev);
+                  }}
                   className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'goals' ? 'bg-white text-violet-700 shadow-sm' : 'text-slate-600 hover:text-slate-800'}`}
                 >
                   My Goals
                 </button>
-                <div className="hidden group-hover:block absolute left-0 mt-2 w-64 bg-white rounded-2xl shadow-lg border border-slate-200 p-4 z-40">
-                  <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Life Aspects</h3>
-                  <div className="space-y-1">
-                    {(['All', ...Object.values(LifeAspect)] as const).map(aspect => (
-                      <button
-                        key={aspect}
-                        onClick={() => {
-                          setFilterAspect(aspect);
-                          setView('goals');
-                        }}
-                        className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-all flex justify-between items-center ${
-                          filterAspect === aspect
-                            ? 'bg-slate-100 text-slate-900'
-                            : 'text-slate-500 hover:bg-slate-50'
-                        }`}
-                      >
-                        {aspect}
-                        {aspect !== 'All' && (
-                          <span className="text-xs bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full">
-                            {goals.filter(g => g.aspect === aspect).length}
-                          </span>
-                        )}
-                      </button>
-                    ))}
+                {isLifeAspectsOpen && (
+                  <div className="absolute left-0 mt-2 w-64 bg-white rounded-2xl shadow-lg border border-slate-200 p-4 z-40">
+                    <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Life Aspects</h3>
+                    <div className="space-y-1">
+                      {(['All', ...Object.values(LifeAspect)] as const).map(aspect => (
+                        <button
+                          key={aspect}
+                          onClick={() => {
+                            setFilterAspect(aspect);
+                            setView('goals');
+                            setIsLifeAspectsOpen(false);
+                          }}
+                          className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-all flex justify-between items-center ${
+                            filterAspect === aspect
+                              ? 'bg-slate-100 text-slate-900'
+                              : 'text-slate-500 hover:bg-slate-50'
+                          }`}
+                        >
+                          {aspect}
+                          {aspect !== 'All' && (
+                            <span className="text-xs bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full">
+                              {goals.filter(g => g.aspect === aspect).length}
+                            </span>
+                          )}
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
 
               <button
-                onClick={() => setView('schedule')}
+                onClick={() => {
+                  setView('schedule');
+                  setIsLifeAspectsOpen(false);
+                }}
                 className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'schedule' ? 'bg-white text-violet-700 shadow-sm' : 'text-slate-600 hover:text-slate-800'}`}
               >
                 Schedule
