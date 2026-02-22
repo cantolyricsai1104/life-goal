@@ -139,28 +139,7 @@ const App: React.FC = () => {
 
   const handleCreateHabitFromSchedule = (timeOfDay: string, duration: number, title: string) => {
     if (goals.length === 0) {
-      const newHabit: Habit = {
-        id: uuidv4(),
-        title,
-        frequency: 'daily',
-        completedDates: [],
-        streak: 0,
-        recommendedDuration: duration,
-        timeOfDay,
-      };
-
-      const newGoal: Goal = {
-        id: uuidv4(),
-        title: 'Schedule',
-        description: 'Tasks created from the schedule view',
-        aspect: LifeAspect.HEALTH,
-        progress: 0,
-        milestones: [],
-        habits: [newHabit],
-        createdAt: Date.now(),
-      };
-
-      void handleAddGoal(newGoal);
+      window.alert('Create a goal first, then you can add tasks to your schedule.');
       return;
     }
 
