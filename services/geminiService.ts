@@ -1,7 +1,7 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { LifeAspect } from '../types';
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+const ai = new GoogleGenAI({ apiKey: "AIzaSyBcuMx99AVLqjSCIJezpDU5RCyiBHwEWZA" });
 
 export interface AIHabit {
   title: string;
