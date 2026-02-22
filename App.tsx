@@ -184,22 +184,76 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 pb-20 md:pb-0">
-      
-      {/* Top Navigation */}
       <nav className="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-6">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 bg-violet-600 rounded-lg flex items-center justify-center text-white font-bold text-lg shadow-lg shadow-violet-200">
               L
             </div>
             <span className="font-bold text-xl tracking-tight text-slate-800">LifeArchitect</span>
           </div>
+
+          <div className="hidden md:flex flex-1 justify-center">
+            <div className="bg-slate-100 p-1 rounded-xl shadow-sm border border-slate-200 flex items-center gap-1">
+              <div className="relative group">
+                <button
+                  onClick={() => setView('goals')}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'goals' ? 'bg-white text-violet-700 shadow-sm' : 'text-slate-600 hover:text-slate-800'}`}
+                >
+                  My Goals
+                </button>
+                <div className="hidden group-hover:block absolute left-0 mt-2 w-64 bg-white rounded-2xl shadow-lg border border-slate-200 p-4 z-40">
+                  <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Life Aspects</h3>
+                  <div className="space-y-1">
+                    {(['All', ...Object.values(LifeAspect)] as const).map(aspect => (
+                      <button
+                        key={aspect}
+                        onClick={() => {
+                          setFilterAspect(aspect);
+                          setView('goals');
+                        }}
+                        className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-all flex justify-between items-center ${
+                          filterAspect === aspect
+                            ? 'bg-slate-100 text-slate-900'
+                            : 'text-slate-500 hover:bg-slate-50'
+                        }`}
+                      >
+                        {aspect}
+                        {aspect !== 'All' && (
+                          <span className="text-xs bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full">
+                            {goals.filter(g => g.aspect === aspect).length}
+                          </span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setView('schedule')}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'schedule' ? 'bg-white text-violet-700 shadow-sm' : 'text-slate-600 hover:text-slate-800'}`}
+              >
+                Schedule
+              </button>
+
+              <button
+                onClick={() => setView('analytics')}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'analytics' ? 'bg-white text-violet-700 shadow-sm' : 'text-slate-600 hover:text-slate-800'}`}
+              >
+                Analytics
+              </button>
+            </div>
+          </div>
+
           <div className="flex items-center gap-4">
-             <div className="hidden md:flex text-sm text-slate-500 font-medium bg-slate-100 px-3 py-1.5 rounded-full items-center gap-2">
-                <Calendar className="w-4 h-4" />
-                <span>Today: {activeHabitsCount}/{totalHabits} Habits</span>
-             </div>
-            <button 
+            <div className="hidden md:flex text-sm text-slate-500 font-medium bg-slate-100 px-3 py-1.5 rounded-full items-center gap-2">
+              <Calendar className="w-4 h-4" />
+              <span>
+                Today: {activeHabitsCount}/{totalHabits} Habits
+              </span>
+            </div>
+            <button
               onClick={() => setIsWizardOpen(true)}
               className="bg-violet-600 hover:bg-violet-700 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2 text-sm shadow-md shadow-violet-100"
             >
@@ -211,92 +265,33 @@ const App: React.FC = () => {
       </nav>
 
       <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        
-        {/* Mobile View Switcher */}
         <div className="flex md:hidden bg-white p-1 rounded-xl shadow-sm border border-slate-200 mb-6">
-          <button 
+          <button
             onClick={() => setView('goals')}
             className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'goals' ? 'bg-violet-50 text-violet-700' : 'text-slate-500'}`}
           >
-            Goals
+            My Goals
           </button>
-          <button 
-             onClick={() => setView('schedule')}
-             className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'schedule' ? 'bg-violet-50 text-violet-700' : 'text-slate-500'}`}
+          <button
+            onClick={() => setView('schedule')}
+            className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'schedule' ? 'bg-violet-50 text-violet-700' : 'text-slate-500'}`}
           >
             Schedule
           </button>
-          <button 
-             onClick={() => setView('analytics')}
-             className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'analytics' ? 'bg-violet-50 text-violet-700' : 'text-slate-500'}`}
+          <button
+            onClick={() => setView('analytics')}
+            className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'analytics' ? 'bg-violet-50 text-violet-700' : 'text-slate-500'}`}
           >
             Analytics
           </button>
         </div>
 
-        {view === 'schedule' ? (
-          <DailySchedule 
-            goals={goals} 
-            onToggleHabit={(habitId) => handleTimerComplete(habitId)} 
-          />
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            
-            {/* Left Column: Filter, Analytics, and Supabase panels (Desktop) / Goals (Mobile) */}
-            <div className={`space-y-6 ${view === 'analytics' ? 'block' : 'hidden md:block'}`}>
-              
-              {/* Desktop Navigation (Pseudo-tabs) */}
-              <div className="hidden md:flex bg-white p-1 rounded-xl shadow-sm border border-slate-200">
-                 <button 
-                  onClick={() => setView('goals')}
-                  className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'goals' ? 'bg-violet-50 text-violet-700' : 'text-slate-500'}`}
-                >
-                  My Goals
-                </button>
-                <button 
-                   onClick={() => setView('schedule')}
-                   className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'schedule' ? 'bg-violet-50 text-violet-700' : 'text-slate-500'}`}
-                >
-                  Schedule
-                </button>
-              </div>
+        {view === 'schedule' && (
+          <DailySchedule goals={goals} onToggleHabit={habitId => handleTimerComplete(habitId)} />
+        )}
 
-              {/* Filter */}
-              <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
-              <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4">Life Aspects</h3>
-              <div className="space-y-1">
-                {(['All', ...Object.values(LifeAspect)] as const).map(aspect => (
-                  <button
-                    key={aspect}
-                    onClick={() => setFilterAspect(aspect)}
-                    className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-all flex justify-between items-center ${
-                      filterAspect === aspect 
-                        ? 'bg-slate-100 text-slate-900' 
-                        : 'text-slate-500 hover:bg-slate-50'
-                    }`}
-                  >
-                    {aspect}
-                    {aspect !== 'All' && (
-                      <span className="text-xs bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full">
-                        {goals.filter(g => g.aspect === aspect).length}
-                      </span>
-                    )}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Supabase panels (only visible on Analytics view) */}
-            {view === 'analytics' && (
-              <div className="space-y-4">
-                <SupabaseGoalsDemo />
-                <UserHistoryPanel />
-              </div>
-            )}
-          </div>
-
-          {/* Right Column: Goals Grid */}
-          <div className={`md:col-span-2 space-y-6 ${view === 'goals' ? 'block' : 'hidden md:block'}`}>
+        {view === 'goals' && (
+          <div className="space-y-6">
             <div className="flex items-center justify-between">
               <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
                 <Trophy className="w-6 h-6 text-amber-500" />
@@ -311,8 +306,10 @@ const App: React.FC = () => {
                   <Plus className="w-8 h-8 text-slate-400" />
                 </div>
                 <h3 className="text-lg font-medium text-slate-900">No goals found</h3>
-                <p className="text-slate-500 max-w-xs mx-auto mt-2 mb-6">Start by creating a new goal or selecting a different category.</p>
-                <button 
+                <p className="text-slate-500 max-w-xs mx-auto mt-2 mb-6">
+                  Start by creating a new goal or selecting a different category.
+                </p>
+                <button
                   onClick={() => setIsWizardOpen(true)}
                   className="px-4 py-2 bg-violet-600 text-white rounded-lg hover:bg-violet-700 transition-colors"
                 >
@@ -322,10 +319,10 @@ const App: React.FC = () => {
             ) : (
               <div className="grid gap-4">
                 {filteredGoals.map(goal => (
-                  <GoalCard 
-                    key={goal.id} 
-                    goal={goal} 
-                    onUpdateGoal={handleUpdateGoal} 
+                  <GoalCard
+                    key={goal.id}
+                    goal={goal}
+                    onUpdateGoal={handleUpdateGoal}
                     onDeleteGoal={handleDeleteGoal}
                     onStartTimer={handleStartTimer}
                   />
@@ -333,8 +330,17 @@ const App: React.FC = () => {
               </div>
             )}
           </div>
+        )}
 
-        </div>
+        {view === 'analytics' && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-4">
+              <SupabaseGoalsDemo />
+            </div>
+            <div className="space-y-4">
+              <UserHistoryPanel />
+            </div>
+          </div>
         )}
       </main>
 
