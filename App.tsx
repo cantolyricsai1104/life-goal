@@ -6,6 +6,10 @@ import { GoalWizard } from './components/GoalWizard';
 import { FullScreenTimer } from './components/FullScreenTimer';
 import { DailySchedule } from './components/DailySchedule';
 import { SupabaseGoalsDemo } from './components/SupabaseGoalsDemo';
+import { AuthPanel } from './components/AuthPanel';
+import { UserHistoryPanel } from './components/UserHistoryPanel';
+import { useAuth } from './contexts/AuthContext';
+import { saveRecord } from './services/recordsService';
 import { v4 as uuidv4 } from 'uuid';
 
 const MOCK_GOALS: Goal[] = [
@@ -51,6 +55,7 @@ const App: React.FC = () => {
   const [view, setView] = useState<'goals' | 'analytics' | 'schedule'>('goals');
   const [activeHabit, setActiveHabit] = useState<Habit | null>(null);
   const [isTimerOpen, setIsTimerOpen] = useState(false);
+  const { user } = useAuth();
 
   const handleStartTimer = (habit: Habit) => {
     setActiveHabit(habit);
@@ -80,8 +85,16 @@ const App: React.FC = () => {
     }));
   };
 
-  const handleAddGoal = (goal: Goal) => {
+  const handleAddGoal = async (goal: Goal) => {
     setGoals(prev => [goal, ...prev]);
+
+    if (user) {
+      await saveRecord(user, 'goal_created', {
+        id: goal.id,
+        title: goal.title,
+        aspect: goal.aspect,
+      });
+    }
   };
 
   const handleUpdateGoal = (updatedGoal: Goal) => {
@@ -139,6 +152,10 @@ const App: React.FC = () => {
       {/* Main Layout */}
       <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         
+        <div className="mb-4 max-w-md">
+          <AuthPanel />
+        </div>
+
         {/* Mobile View Switcher */}
         <div className="flex md:hidden bg-white p-1 rounded-xl shadow-sm border border-slate-200 mb-6">
           <button 
@@ -169,7 +186,7 @@ const App: React.FC = () => {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             
-            {/* Left Column: Filter, Analytics, and Supabase demo (Desktop) / Goals (Mobile) */}
+            {/* Left Column: Filter, Analytics, and Supabase panels (Desktop) / Goals (Mobile) */}
             <div className={`space-y-6 ${view === 'analytics' ? 'block' : 'hidden md:block'}`}>
               
               {/* Desktop Navigation (Pseudo-tabs) */}
@@ -213,9 +230,12 @@ const App: React.FC = () => {
               </div>
             </div>
 
-            {/* Supabase demo panel (only visible on Analytics view) */}
+            {/* Supabase panels (only visible on Analytics view) */}
             {view === 'analytics' && (
-              <SupabaseGoalsDemo />
+              <div className="space-y-4">
+                <SupabaseGoalsDemo />
+                <UserHistoryPanel />
+              </div>
             )}
           </div>
 
