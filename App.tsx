@@ -5,8 +5,6 @@ import { GoalCard } from './components/GoalCard';
 import { GoalWizard } from './components/GoalWizard';
 import { FullScreenTimer } from './components/FullScreenTimer';
 import { DailySchedule } from './components/DailySchedule';
-import { SupabaseGoalsDemo } from './components/SupabaseGoalsDemo';
-import { UserHistoryPanel } from './components/UserHistoryPanel';
 import { LandingPage } from './components/LandingPage';
 import { useAuth } from './contexts/AuthContext';
 import { saveRecord } from './services/recordsService';
@@ -53,7 +51,7 @@ const App: React.FC = () => {
   const [goals, setGoals] = useState<Goal[]>([]);
   const [isWizardOpen, setIsWizardOpen] = useState(false);
   const [filterAspect, setFilterAspect] = useState<LifeAspect | 'All'>('All');
-  const [view, setView] = useState<'goals' | 'analytics' | 'schedule'>('goals');
+  const [view, setView] = useState<'goals' | 'schedule'>('goals');
   const [activeHabit, setActiveHabit] = useState<Habit | null>(null);
   const [isTimerOpen, setIsTimerOpen] = useState(false);
   const { user, loading } = useAuth();
@@ -236,13 +234,6 @@ const App: React.FC = () => {
               >
                 Schedule
               </button>
-
-              <button
-                onClick={() => setView('analytics')}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'analytics' ? 'bg-white text-violet-700 shadow-sm' : 'text-slate-600 hover:text-slate-800'}`}
-              >
-                Analytics
-              </button>
             </div>
           </div>
 
@@ -277,12 +268,6 @@ const App: React.FC = () => {
             className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'schedule' ? 'bg-violet-50 text-violet-700' : 'text-slate-500'}`}
           >
             Schedule
-          </button>
-          <button
-            onClick={() => setView('analytics')}
-            className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'analytics' ? 'bg-violet-50 text-violet-700' : 'text-slate-500'}`}
-          >
-            Analytics
           </button>
         </div>
 
@@ -329,17 +314,6 @@ const App: React.FC = () => {
                 ))}
               </div>
             )}
-          </div>
-        )}
-
-        {view === 'analytics' && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-4">
-              <SupabaseGoalsDemo />
-            </div>
-            <div className="space-y-4">
-              <UserHistoryPanel />
-            </div>
           </div>
         )}
       </main>
