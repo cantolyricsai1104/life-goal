@@ -58,15 +58,14 @@ export const FullScreenTimer: React.FC<FullScreenTimerProps> = ({
 
   const createId = () => uuidv4();
 
-  const getStorageKey = (habitId: string, userId?: string) => {
-    const keyUserId = userId || 'anon';
-    return `timer-memos:${keyUserId}:${habitId}`;
+  const getStorageKey = (habitId: string) => {
+    return `timer-memos:${habitId}`;
   };
 
   const persistMemosToStorage = (habitId: string, nextMemos: Memo[]) => {
     if (typeof window === 'undefined') return;
     try {
-      const key = getStorageKey(habitId, user?.id);
+      const key = getStorageKey(habitId);
       window.localStorage.setItem(key, JSON.stringify(nextMemos));
     } catch (error) {
       console.error('Failed to persist timer memos to localStorage', error);
@@ -79,9 +78,13 @@ export const FullScreenTimer: React.FC<FullScreenTimerProps> = ({
       setIsActive(false);
       let loadedFromStorage = false;
       if (typeof window !== 'undefined') {
-        const key = getStorageKey(habit.id, user?.id);
-        const legacyKey = `timer-memos:${habit.id}`;
-        const keysToTry = [key, legacyKey];
+        const key = getStorageKey(habit.id);
+        const legacyKeys: string[] = [];
+        if (user) {
+          legacyKeys.push(`timer-memos:${user.id}:${habit.id}`);
+        }
+        legacyKeys.push(`timer-memos:anon:${habit.id}`);
+        const keysToTry = [key, ...legacyKeys];
         for (const storageKey of keysToTry) {
           const raw = window.localStorage.getItem(storageKey);
           if (!raw) continue;
