@@ -60,6 +60,8 @@ export const FullScreenTimer: React.FC<FullScreenTimerProps> = ({
   const [lastRemoteStatus, setLastRemoteStatus] = useState<string | null>(null);
   const [lastRemoteAt, setLastRemoteAt] = useState<number | null>(null);
   const [lastError, setLastError] = useState<string | null>(null);
+  const [storageKeys, setStorageKeys] = useState<string[]>([]);
+  const [storageBytes, setStorageBytes] = useState<number | null>(null);
   const timerRef = useRef<number | null>(null);
 
   const createId = () => uuidv4();
@@ -74,6 +76,12 @@ export const FullScreenTimer: React.FC<FullScreenTimerProps> = ({
       const key = getStorageKey(habitId);
       window.localStorage.setItem(key, JSON.stringify(nextMemos));
       setLastPersistAt(Date.now());
+      const raw = window.localStorage.getItem(key);
+      setStorageBytes(raw ? raw.length : 0);
+      const keys = Object.keys(window.localStorage)
+        .filter(storageKey => storageKey.startsWith('timer-memos:'))
+        .sort();
+      setStorageKeys(keys);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       setLastError(message);
@@ -116,6 +124,12 @@ export const FullScreenTimer: React.FC<FullScreenTimerProps> = ({
           setMemos([]);
           setLastLoadSource('localStorage:empty');
         }
+        const raw = window.localStorage.getItem(key);
+        setStorageBytes(raw ? raw.length : 0);
+        const keys = Object.keys(window.localStorage)
+          .filter(storageKey => storageKey.startsWith('timer-memos:'))
+          .sort();
+        setStorageKeys(keys);
       }
       if (user) {
         void fetchUserTimerMemos(user, habit.id)
@@ -140,6 +154,17 @@ export const FullScreenTimer: React.FC<FullScreenTimerProps> = ({
       setMemos([]);
     }
   }, [isOpen, habit, user]);
+
+  useEffect(() => {
+    if (!debugOpen || typeof window === 'undefined' || !habit) return;
+    const key = getStorageKey(habit.id);
+    const raw = window.localStorage.getItem(key);
+    setStorageBytes(raw ? raw.length : 0);
+    const keys = Object.keys(window.localStorage)
+      .filter(storageKey => storageKey.startsWith('timer-memos:'))
+      .sort();
+    setStorageKeys(keys);
+  }, [debugOpen, habit]);
 
   useEffect(() => {
     if (isActive && timeLeft > 0) {
@@ -611,8 +636,11 @@ export const FullScreenTimer: React.FC<FullScreenTimerProps> = ({
           </div>
           <div className="space-y-1">
             <div>habitId: {habit.id}</div>
+            <div>habitTitle: {habit.title}</div>
             <div>userId: {user?.id ?? 'none'}</div>
             <div>storageKey: {getStorageKey(habit.id)}</div>
+            <div>storageBytes: {storageBytes ?? 'none'}</div>
+            <div>storageKeys: {storageKeys.length > 0 ? storageKeys.join(', ') : 'none'}</div>
             <div>memos: {memos.length}</div>
             <div>lastLoadSource: {lastLoadSource ?? 'none'}</div>
             <div>lastPersistAt: {lastPersistAt ? new Date(lastPersistAt).toLocaleTimeString() : 'none'}</div>
