@@ -5,6 +5,7 @@ import { GoalCard } from './components/GoalCard';
 import { GoalWizard } from './components/GoalWizard';
 import { FullScreenTimer } from './components/FullScreenTimer';
 import { DailySchedule } from './components/DailySchedule';
+import { SupabaseGoalsDemo } from './components/SupabaseGoalsDemo';
 import { v4 as uuidv4 } from 'uuid';
 
 const MOCK_GOALS: Goal[] = [
@@ -168,7 +169,7 @@ const App: React.FC = () => {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             
-            {/* Left Column: Filter & Analytics (Desktop) / Goals (Mobile) */}
+            {/* Left Column: Filter, Analytics, and Supabase demo (Desktop) / Goals (Mobile) */}
             <div className={`space-y-6 ${view === 'analytics' ? 'block' : 'hidden md:block'}`}>
               
               {/* Desktop Navigation (Pseudo-tabs) */}
@@ -211,6 +212,11 @@ const App: React.FC = () => {
                 ))}
               </div>
             </div>
+
+            {/* Supabase demo panel (only visible on Analytics view) */}
+            {view === 'analytics' && (
+              <SupabaseGoalsDemo />
+            )}
           </div>
 
           {/* Right Column: Goals Grid */}
