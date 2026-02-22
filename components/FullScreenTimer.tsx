@@ -3,6 +3,7 @@ import { X, MoreHorizontal, Play, Pause, Plus, ChevronLeft } from './Icons';
 import { Habit } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { fetchUserTimerMemos, upsertUserTimerMemo, deleteUserTimerMemo } from '../services/timerMemosService';
+import { v4 as uuidv4 } from 'uuid';
 
 interface FullScreenTimerProps {
   isOpen: boolean;
@@ -48,7 +49,7 @@ export const FullScreenTimer: React.FC<FullScreenTimerProps> = ({
   const [contextMenu, setContextMenu] = useState<MemoContextMenu | null>(null);
   const timerRef = useRef<number | null>(null);
 
-  const createId = () => Math.random().toString(36).slice(2);
+  const createId = () => uuidv4();
 
   useEffect(() => {
     if (isOpen && habit) {
