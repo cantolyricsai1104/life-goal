@@ -33,6 +33,46 @@ interface ContextMenuState {
   name: string;
 }
 
+interface TimerMenuState {
+  habit: Habit;
+  x: number;
+  y: number;
+}
+
+interface InlineTimerState {
+  remaining: number;
+  running: boolean;
+}
+
+const getHongKongMinutes = () => {
+  const now = new Date();
+  const timeString = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Asia/Hong_Kong',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).format(now);
+  const [h, m] = timeString.split(':').map(Number);
+  return h * 60 + m;
+};
+
+const getHongKongLabel = () => {
+  const now = new Date();
+  return new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Hong_Kong',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  }).format(now);
+};
+
+const formatSeconds = (seconds: number) => {
+  const clamped = Math.max(0, seconds);
+  const m = Math.floor(clamped / 60);
+  const s = clamped % 60;
+  return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+};
+
 export const DailySchedule: React.FC<DailyScheduleProps> = ({
   goals,
   onToggleHabit,
@@ -47,6 +87,12 @@ export const DailySchedule: React.FC<DailyScheduleProps> = ({
   const [interaction, setInteraction] = useState<InteractionState | null>(null);
   const [tempEdits, setTempEdits] = useState<Record<string, { timeOfDay: string; duration: number }>>({});
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
+  const [timerMenu, setTimerMenu] = useState<TimerMenuState | null>(null);
+  const [inlineTimers, setInlineTimers] = useState<Record<string, InlineTimerState>>({});
+  const [currentHongKongTime, setCurrentHongKongTime] = useState(() => ({
+    minutes: getHongKongMinutes(),
+    label: getHongKongLabel(),
+  }));
 
   // Generate days for the week view
   const weekDays = useMemo(() => {
@@ -80,12 +126,22 @@ export const DailySchedule: React.FC<DailyScheduleProps> = ({
     });
   }, [goals, selectedDate]);
 
-  // Scroll to current time on mount
+  useEffect(() => {
+    const update = () => {
+      setCurrentHongKongTime({
+        minutes: getHongKongMinutes(),
+        label: getHongKongLabel(),
+      });
+    };
+    update();
+    const id = window.setInterval(update, 60000);
+    return () => window.clearInterval(id);
+  }, []);
+
   useEffect(() => {
     if (scrollContainerRef.current) {
-      const currentHour = new Date().getHours();
-      // Scroll to 1 hour before current time to give context
-      const scrollPosition = Math.max(0, (currentHour - 1) * 60); 
+      const minutes = getHongKongMinutes();
+      const scrollPosition = Math.max(0, minutes - 60);
       scrollContainerRef.current.scrollTop = scrollPosition;
     }
   }, []);
@@ -280,6 +336,47 @@ export const DailySchedule: React.FC<DailyScheduleProps> = ({
     };
   }, [contextMenu]);
 
+  useEffect(() => {
+    if (!timerMenu) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setTimerMenu(null);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [timerMenu]);
+
+  useEffect(() => {
+    const hasRunningTimer = Object.keys(inlineTimers).some(habitId => {
+      const timer = inlineTimers[habitId];
+      return timer.running && timer.remaining > 0;
+    });
+    if (!hasRunningTimer) {
+      return;
+    }
+    const id = window.setInterval(() => {
+      setInlineTimers(prev => {
+        const next: Record<string, InlineTimerState> = {};
+        Object.keys(prev).forEach(habitId => {
+          const timer = prev[habitId];
+          if (!timer.running || timer.remaining <= 0) {
+            next[habitId] = timer;
+          } else {
+            next[habitId] = {
+              running: true,
+              remaining: timer.remaining - 1,
+            };
+          }
+        });
+        return next;
+      });
+    }, 1000);
+    return () => window.clearInterval(id);
+  }, [inlineTimers]);
+
   // Group habits by hour to avoid overlap or just list them
   // For the timeline view, we want to place them at specific vertical positions
   
@@ -349,9 +446,14 @@ export const DailySchedule: React.FC<DailyScheduleProps> = ({
         {isSameDay(selectedDate, new Date()) && (
             <div 
                 className="absolute left-0 right-0 border-t-2 border-red-400 z-20 pointer-events-none flex items-center"
-                style={{ top: `${(new Date().getHours() * 60) + new Date().getMinutes()}px` }}
+                style={{ top: `${currentHongKongTime.minutes}px` }}
             >
-                <div className="w-2 h-2 bg-red-400 rounded-full -ml-1"></div>
+                <div className="flex items-center -ml-1">
+                  <div className="px-2 py-0.5 rounded-full bg-red-500 text-white text-[10px] mr-2">
+                    {currentHongKongTime.label}
+                  </div>
+                  <div className="w-2 h-2 bg-red-400 rounded-full"></div>
+                </div>
             </div>
         )}
 
@@ -388,6 +490,7 @@ export const DailySchedule: React.FC<DailyScheduleProps> = ({
             const height = Math.max(duration, 30);
 
             const isCompleted = habit.completedDates.includes(format(selectedDate, 'yyyy-MM-dd'));
+            const inlineTimer = inlineTimers[habit.id];
 
             const handleEventMouseDown = (event: React.MouseEvent<HTMLDivElement>) => {
               if (event.button !== 0) return;
@@ -457,27 +560,85 @@ export const DailySchedule: React.FC<DailyScheduleProps> = ({
                       {format(new Date(0, 0, 0, Math.floor((minutes + duration) / 60), (minutes + duration) % 60), 'h:mm a')}
                     </span>
                   </div>
-                  <button
-                    type="button"
-                    className="ml-2 flex items-center justify-center w-6 h-6 rounded-full bg-white/70 hover:bg-white shadow-sm"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      onStartTimer(habit);
-                    }}
-                  >
-                    <TimerIcon className="w-3 h-3 text-slate-600" />
-                  </button>
-                  {isCompleted && (
-                    <div className={`rounded-full p-1 ${goalColor} text-white`}>
-                        <Check className="w-3 h-3" />
-                    </div>
-                  )}
+                  <div className="flex flex-col items-end gap-1 ml-2">
+                    <button
+                      type="button"
+                      className="flex items-center justify-center w-6 h-6 rounded-full bg-white/70 hover:bg-white shadow-sm"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setTimerMenu({
+                          habit,
+                          x: event.clientX,
+                          y: event.clientY,
+                        });
+                      }}
+                    >
+                      <TimerIcon className="w-3 h-3 text-slate-600" />
+                    </button>
+                    <button
+                      type="button"
+                      className={`rounded-full p-1 border ${
+                        isCompleted ? `${goalColor} text-white border-transparent` : 'bg-white text-slate-400 border-slate-200'
+                      }`}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onToggleHabit(habit.id);
+                      }}
+                    >
+                      <Check className="w-3 h-3" />
+                    </button>
+                    {inlineTimer && (
+                      <span className="text-[10px] font-semibold text-emerald-600">
+                        {formatSeconds(inlineTimer.remaining)}
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
             );
           })}
         </div>
       </div>
+      {timerMenu && (
+        <div
+          className="fixed inset-0 z-40"
+          onClick={() => setTimerMenu(null)}
+        >
+          <div
+            className="absolute bg-white rounded-xl shadow-lg border border-slate-200 p-3 w-56 space-y-2"
+            style={{ top: timerMenu.y, left: timerMenu.x }}
+            onClick={event => event.stopPropagation()}
+          >
+            <div className="text-xs font-semibold text-slate-700 truncate">
+              {timerMenu.habit.title}
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                onStartTimer(timerMenu.habit);
+                setTimerMenu(null);
+              }}
+              className="w-full text-sm font-medium px-3 py-1.5 rounded-md bg-slate-900 text-white hover:bg-slate-800"
+            >
+              Full screen timer
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                const seconds = (timerMenu.habit.recommendedDuration ?? 20) * 60;
+                setInlineTimers(prev => ({
+                  ...prev,
+                  [timerMenu.habit.id]: { remaining: seconds, running: true },
+                }));
+                setTimerMenu(null);
+              }}
+              className="w-full text-sm font-medium px-3 py-1.5 rounded-md bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+            >
+              Inline timer in card
+            </button>
+          </div>
+        </div>
+      )}
       {contextMenu && (
         <div
           className="fixed inset-0 z-40"

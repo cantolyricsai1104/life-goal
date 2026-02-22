@@ -103,6 +103,28 @@ const App: React.FC = () => {
     }));
   };
 
+  const handleToggleHabitCompletion = (habitId: string) => {
+    const today = new Date().toISOString().split('T')[0];
+
+    setGoals(prevGoals =>
+      prevGoals.map(goal => {
+        let changed = false;
+        const habits = goal.habits.map(habit => {
+          if (habit.id !== habitId) return habit;
+          const isCompleted = habit.completedDates.includes(today);
+          const completedDates = isCompleted
+            ? habit.completedDates.filter(date => date !== today)
+            : [...habit.completedDates, today];
+          const streak = isCompleted ? Math.max(0, habit.streak - 1) : habit.streak + 1;
+          changed = true;
+          return { ...habit, completedDates, streak };
+        });
+        if (!changed) return goal;
+        return { ...goal, habits };
+      }),
+    );
+  };
+
   const handleUpdateHabitSchedule = (habitId: string, updates: Partial<Habit>) => {
     const goal = goals.find(g => g.habits.some(h => h.id === habitId));
     if (!goal) return;
@@ -353,7 +375,7 @@ const App: React.FC = () => {
         {view === 'schedule' && (
           <DailySchedule
             goals={goals}
-            onToggleHabit={habitId => handleTimerComplete(habitId)}
+            onToggleHabit={handleToggleHabitCompletion}
             onUpdateHabitSchedule={handleUpdateHabitSchedule}
             onCreateHabit={handleCreateHabitFromSchedule}
             onDeleteHabit={handleDeleteHabitFromSchedule}
