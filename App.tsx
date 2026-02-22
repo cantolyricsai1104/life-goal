@@ -10,6 +10,7 @@ import { useAuth } from './contexts/AuthContext';
 import { saveRecord } from './services/recordsService';
 import { fetchUserGoals, upsertUserGoal, deleteUserGoal } from './services/goalsService';
 import { fetchUserScheduleTasks, upsertUserScheduleTask, deleteUserScheduleTask } from './services/scheduleTasksService';
+import { supabase, isSupabaseConfigured } from './services/supabaseClient';
 import { v4 as uuidv4 } from 'uuid';
 
 const MOCK_GOALS: Goal[] = [
@@ -58,6 +59,15 @@ const App: React.FC = () => {
   const [isTimerOpen, setIsTimerOpen] = useState(false);
   const [isLifeAspectsOpen, setIsLifeAspectsOpen] = useState(false);
   const { user, loading } = useAuth();
+
+  const handleLogout = async () => {
+    if (!isSupabaseConfigured || !supabase) return;
+    try {
+      await supabase.auth.signOut();
+    } catch (error) {
+      console.error('Failed to log out', error);
+    }
+  };
 
   useEffect(() => {
     const loadData = async () => {
@@ -407,6 +417,13 @@ const App: React.FC = () => {
             >
               <Plus className="w-4 h-4" />
               <span className="hidden sm:inline">New Goal</span>
+            </button>
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="text-sm font-medium text-slate-600 hover:text-slate-900 px-3 py-1.5 rounded-lg hover:bg-slate-100"
+            >
+              Log out
             </button>
           </div>
         </div>

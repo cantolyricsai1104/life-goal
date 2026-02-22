@@ -58,15 +58,14 @@ export const FullScreenTimer: React.FC<FullScreenTimerProps> = ({
 
   const createId = () => uuidv4();
 
-  const getStorageKey = (habitId: string) => {
-    const userKey = user ? user.id : 'anon';
-    return `timer-memos:${userKey}:${habitId}`;
+  const getStorageKey = (habitId: string, userId: string) => {
+    return `timer-memos:${userId}:${habitId}`;
   };
 
   const persistMemosToStorage = (habitId: string, nextMemos: Memo[]) => {
-    if (typeof window === 'undefined') return;
+    if (typeof window === 'undefined' || !user) return;
     try {
-      const key = getStorageKey(habitId);
+      const key = getStorageKey(habitId, user.id);
       window.localStorage.setItem(key, JSON.stringify(nextMemos));
     } catch (error) {
       console.error('Failed to persist timer memos to localStorage', error);
@@ -78,20 +77,30 @@ export const FullScreenTimer: React.FC<FullScreenTimerProps> = ({
       setTimeLeft((habit.recommendedDuration || 30) * 60);
       setIsActive(false);
       let loadedFromStorage = false;
-      if (typeof window !== 'undefined') {
-        const key = getStorageKey(habit.id);
-        const raw = window.localStorage.getItem(key);
-        if (raw) {
+      if (typeof window !== 'undefined' && user) {
+        const key = getStorageKey(habit.id, user.id);
+        const legacyKey = `timer-memos:${habit.id}`;
+        const keysToTry = [key, legacyKey];
+        for (const storageKey of keysToTry) {
+          const raw = window.localStorage.getItem(storageKey);
+          if (!raw) continue;
           try {
             const parsed = JSON.parse(raw) as Memo[];
             setMemos(parsed);
             loadedFromStorage = true;
+            if (storageKey !== key) {
+              window.localStorage.setItem(key, raw);
+            }
+            break;
           } catch (error) {
             console.error('Failed to parse timer memos from localStorage', error);
           }
-        } else {
+        }
+        if (!loadedFromStorage) {
           setMemos([]);
         }
+      } else if (typeof window !== 'undefined' && !user) {
+        setMemos([]);
       }
       if (user) {
         void fetchUserTimerMemos(user, habit.id)
