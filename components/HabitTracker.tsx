@@ -1,14 +1,14 @@
 import React from 'react';
 import { Check } from './Icons';
 import { Habit } from '../types';
-import { HabitTimer } from './HabitTimer';
 
 interface HabitTrackerProps {
   habit: Habit;
   onToggle: (habitId: string) => void;
+  onStartTimer: (habit: Habit) => void;
 }
 
-export const HabitTracker: React.FC<HabitTrackerProps> = ({ habit, onToggle }) => {
+export const HabitTracker: React.FC<HabitTrackerProps> = ({ habit, onToggle, onStartTimer }) => {
   const today = new Date().toISOString().split('T')[0];
   const isCompletedToday = habit.completedDates.includes(today);
 
@@ -47,11 +47,15 @@ export const HabitTracker: React.FC<HabitTrackerProps> = ({ habit, onToggle }) =
       
       <div className="flex items-center gap-3">
         {habit.recommendedDuration && !isCompletedToday && (
-          <HabitTimer 
-            durationMinutes={habit.recommendedDuration} 
-            onComplete={() => onToggle(habit.id)} 
-            disabled={isCompletedToday}
-          />
+          <button 
+            onClick={(e) => {
+              e.stopPropagation();
+              onStartTimer(habit);
+            }}
+            className="flex items-center gap-1.5 bg-violet-50 hover:bg-violet-100 text-violet-600 px-2 py-1 rounded-lg transition-colors border border-violet-100"
+          >
+            <span className="text-xs font-bold">Start</span>
+          </button>
         )}
         
         {isCompletedToday && (

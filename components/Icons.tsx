@@ -16,7 +16,11 @@ import {
   ChevronRight,
   Play,
   Square,
-  Timer
+  Timer,
+  X,
+  MoreHorizontal,
+  Pause,
+  ChevronLeft
 } from 'lucide-react';
 import { LifeAspect } from '../types';
 
@@ -43,5 +47,9 @@ export {
   ChevronRight,
   Play,
   Square,
-  Timer
+  Timer,
+  X,
+  MoreHorizontal,
+  Pause,
+  ChevronLeft
 };

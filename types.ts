@@ -14,6 +14,7 @@ export interface Habit {
   completedDates: string[]; // ISO date strings YYYY-MM-DD
   streak: number;
   recommendedDuration?: number; // In minutes, optional
+  timeOfDay?: string; // HH:MM format (24h), e.g., "08:00"
 }
 
 export interface Milestone {

@@ -1,9 +1,10 @@
 import React, { useState, useMemo } from 'react';
 import { Plus, Trophy, BarChart3, Calendar } from './components/Icons';
-import { Goal, LifeAspect } from './types';
+import { Goal, LifeAspect, Habit } from './types';
 import { GoalCard } from './components/GoalCard';
 import { GoalWizard } from './components/GoalWizard';
-import { LifeBalanceRadar, CompletionBarChart } from './components/Charts';
+import { FullScreenTimer } from './components/FullScreenTimer';
+import { DailySchedule } from './components/DailySchedule';
 import { v4 as uuidv4 } from 'uuid';
 
 const MOCK_GOALS: Goal[] = [
@@ -19,8 +20,8 @@ const MOCK_GOALS: Goal[] = [
       { id: uuidv4(), title: "Complete 15k training run", completed: false }
     ],
     habits: [
-      { id: uuidv4(), title: "Morning training run", frequency: 'daily', completedDates: [], streak: 5, recommendedDuration: 45 },
-      { id: uuidv4(), title: "Stretching routine", frequency: 'daily', completedDates: [], streak: 3, recommendedDuration: 10 }
+      { id: uuidv4(), title: "Morning training run", frequency: 'daily', completedDates: [], streak: 5, recommendedDuration: 45, timeOfDay: "06:30" },
+      { id: uuidv4(), title: "Stretching routine", frequency: 'daily', completedDates: [], streak: 3, recommendedDuration: 10, timeOfDay: "07:30" }
     ],
     createdAt: Date.now()
   },
@@ -36,7 +37,7 @@ const MOCK_GOALS: Goal[] = [
       { id: uuidv4(), title: "Build a Fullstack App", completed: false }
     ],
     habits: [
-      { id: uuidv4(), title: "Deep Focus Coding Session", frequency: 'daily', completedDates: [], streak: 12, recommendedDuration: 90 }
+      { id: uuidv4(), title: "Deep Focus Coding Session", frequency: 'daily', completedDates: [], streak: 12, recommendedDuration: 90, timeOfDay: "20:00" }
     ],
     createdAt: Date.now()
   }
@@ -46,7 +47,37 @@ const App: React.FC = () => {
   const [goals, setGoals] = useState<Goal[]>(MOCK_GOALS);
   const [isWizardOpen, setIsWizardOpen] = useState(false);
   const [filterAspect, setFilterAspect] = useState<LifeAspect | 'All'>('All');
-  const [view, setView] = useState<'goals' | 'analytics'>('goals');
+  const [view, setView] = useState<'goals' | 'analytics' | 'schedule'>('goals');
+  const [activeHabit, setActiveHabit] = useState<Habit | null>(null);
+  const [isTimerOpen, setIsTimerOpen] = useState(false);
+
+  const handleStartTimer = (habit: Habit) => {
+    setActiveHabit(habit);
+    setIsTimerOpen(true);
+  };
+
+  const handleTimerComplete = (habitId: string) => {
+    const today = new Date().toISOString().split('T')[0];
+    
+    setGoals(prevGoals => prevGoals.map(goal => {
+      const habitIndex = goal.habits.findIndex(h => h.id === habitId);
+      if (habitIndex === -1) return goal;
+
+      const habit = goal.habits[habitIndex];
+      if (habit.completedDates.includes(today)) return goal;
+
+      const updatedHabit = {
+        ...habit,
+        completedDates: [...habit.completedDates, today],
+        streak: habit.streak + 1
+      };
+
+      const updatedHabits = [...goal.habits];
+      updatedHabits[habitIndex] = updatedHabit;
+
+      return { ...goal, habits: updatedHabits };
+    }));
+  };
 
   const handleAddGoal = (goal: Goal) => {
     setGoals(prev => [goal, ...prev]);
@@ -113,7 +144,13 @@ const App: React.FC = () => {
             onClick={() => setView('goals')}
             className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'goals' ? 'bg-violet-50 text-violet-700' : 'text-slate-500'}`}
           >
-            My Goals
+            Goals
+          </button>
+          <button 
+             onClick={() => setView('schedule')}
+             className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'schedule' ? 'bg-violet-50 text-violet-700' : 'text-slate-500'}`}
+          >
+            Schedule
           </button>
           <button 
              onClick={() => setView('analytics')}
@@ -123,13 +160,35 @@ const App: React.FC = () => {
           </button>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-          
-          {/* Left Column: Filter & Analytics (Desktop) / Goals (Mobile) */}
-          <div className={`space-y-6 ${view === 'analytics' ? 'block' : 'hidden md:block'}`}>
+        {view === 'schedule' ? (
+          <DailySchedule 
+            goals={goals} 
+            onToggleHabit={(habitId) => handleTimerComplete(habitId)} 
+          />
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             
-            {/* Filter */}
-            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+            {/* Left Column: Filter & Analytics (Desktop) / Goals (Mobile) */}
+            <div className={`space-y-6 ${view === 'analytics' ? 'block' : 'hidden md:block'}`}>
+              
+              {/* Desktop Navigation (Pseudo-tabs) */}
+              <div className="hidden md:flex bg-white p-1 rounded-xl shadow-sm border border-slate-200">
+                 <button 
+                  onClick={() => setView('goals')}
+                  className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'goals' ? 'bg-violet-50 text-violet-700' : 'text-slate-500'}`}
+                >
+                  My Goals
+                </button>
+                <button 
+                   onClick={() => setView('schedule')}
+                   className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'schedule' ? 'bg-violet-50 text-violet-700' : 'text-slate-500'}`}
+                >
+                  Schedule
+                </button>
+              </div>
+
+              {/* Filter */}
+              <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
               <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4">Life Aspects</h3>
               <div className="space-y-1">
                 {(['All', ...Object.values(LifeAspect)] as const).map(aspect => (
@@ -150,16 +209,6 @@ const App: React.FC = () => {
                     )}
                   </button>
                 ))}
-              </div>
-            </div>
-
-            {/* Stats Card */}
-            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
-              <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4">Balance</h3>
-              <LifeBalanceRadar goals={goals} />
-              <div className="mt-4 pt-4 border-t border-slate-100">
-                <h4 className="text-xs font-semibold text-slate-700 mb-2">Goal Completion</h4>
-                <CompletionBarChart goals={goals} />
               </div>
             </div>
           </div>
@@ -196,6 +245,7 @@ const App: React.FC = () => {
                     goal={goal} 
                     onUpdateGoal={handleUpdateGoal} 
                     onDeleteGoal={handleDeleteGoal}
+                    onStartTimer={handleStartTimer}
                   />
                 ))}
               </div>
@@ -203,6 +253,7 @@ const App: React.FC = () => {
           </div>
 
         </div>
+        )}
       </main>
 
       {/* AI Wizard Modal */}
@@ -212,6 +263,14 @@ const App: React.FC = () => {
           onClose={() => setIsWizardOpen(false)} 
         />
       )}
+
+      {/* Full Screen Timer */}
+      <FullScreenTimer 
+        isOpen={isTimerOpen} 
+        onClose={() => setIsTimerOpen(false)} 
+        habit={activeHabit}
+        onComplete={handleTimerComplete}
+      />
     </div>
   );
 };

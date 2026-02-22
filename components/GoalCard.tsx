@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Goal, ASPECT_TEXT_COLORS, ASPECT_COLORS } from '../types';
+import { Goal, ASPECT_TEXT_COLORS, ASPECT_COLORS, Habit } from '../types';
 import { AspectIcon, ChevronRight, Trash2, Sparkles, Check } from './Icons';
 import { HabitTracker } from './HabitTracker';
 import { getAdviceForGoal } from '../services/geminiService';
@@ -9,9 +9,10 @@ interface GoalCardProps {
   goal: Goal;
   onUpdateGoal: (goal: Goal) => void;
   onDeleteGoal: (id: string) => void;
+  onStartTimer: (habit: Habit) => void;
 }
 
-export const GoalCard: React.FC<GoalCardProps> = ({ goal, onUpdateGoal, onDeleteGoal }) => {
+export const GoalCard: React.FC<GoalCardProps> = ({ goal, onUpdateGoal, onDeleteGoal, onStartTimer }) => {
   const [expanded, setExpanded] = useState(false);
   const [adviceLoading, setAdviceLoading] = useState(false);
 
@@ -124,7 +125,12 @@ export const GoalCard: React.FC<GoalCardProps> = ({ goal, onUpdateGoal, onDelete
               <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Daily Habits</h4>
               <div className="grid gap-2">
                 {goal.habits.map(habit => (
-                  <HabitTracker key={habit.id} habit={habit} onToggle={handleToggleHabit} />
+                  <HabitTracker 
+                    key={habit.id} 
+                    habit={habit} 
+                    onToggle={handleToggleHabit} 
+                    onStartTimer={onStartTimer}
+                  />
                 ))}
               </div>
             </div>
