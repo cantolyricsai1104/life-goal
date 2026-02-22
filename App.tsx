@@ -49,6 +49,7 @@ const MOCK_GOALS: Goal[] = [
 
 const App: React.FC = () => {
   const [goals, setGoals] = useState<Goal[]>([]);
+  const [scheduleTasks, setScheduleTasks] = useState<Habit[]>([]);
   const [isWizardOpen, setIsWizardOpen] = useState(false);
   const [filterAspect, setFilterAspect] = useState<LifeAspect | 'All'>('All');
   const [view, setView] = useState<'goals' | 'schedule'>('goals');
@@ -84,67 +85,92 @@ const App: React.FC = () => {
     const today = new Date().toISOString().split('T')[0];
 
     const goal = goals.find(g => g.habits.some(h => h.id === habitId));
-    if (!goal) return;
+    if (goal) {
+      const updatedHabits = goal.habits.map(habit => {
+        if (habit.id !== habitId) return habit;
+        if (habit.completedDates.includes(today)) return habit;
 
-    const updatedHabits = goal.habits.map(habit => {
-      if (habit.id !== habitId) return habit;
-      if (habit.completedDates.includes(today)) return habit;
+        return {
+          ...habit,
+          completedDates: [...habit.completedDates, today],
+          streak: habit.streak + 1,
+        };
+      });
 
-      return {
-        ...habit,
-        completedDates: [...habit.completedDates, today],
-        streak: habit.streak + 1,
-      };
-    });
+      const updatedGoal: Goal = { ...goal, habits: updatedHabits };
+      handleUpdateGoal(updatedGoal);
+      return;
+    }
 
-    const updatedGoal: Goal = { ...goal, habits: updatedHabits };
-    handleUpdateGoal(updatedGoal);
+    setScheduleTasks(prev =>
+      prev.map(habit => {
+        if (habit.id !== habitId) return habit;
+        if (habit.completedDates.includes(today)) return habit;
+
+        return {
+          ...habit,
+          completedDates: [...habit.completedDates, today],
+          streak: habit.streak + 1,
+        };
+      })
+    );
   };
 
   const handleToggleHabitCompletion = (habitId: string) => {
     const today = new Date().toISOString().split('T')[0];
 
     const goal = goals.find(g => g.habits.some(h => h.id === habitId));
-    if (!goal) return;
+    if (goal) {
+      let changed = false;
+      const updatedHabits = goal.habits.map(habit => {
+        if (habit.id !== habitId) return habit;
+        const isCompleted = habit.completedDates.includes(today);
+        const completedDates = isCompleted
+          ? habit.completedDates.filter(date => date !== today)
+          : [...habit.completedDates, today];
+        const streak = isCompleted ? Math.max(0, habit.streak - 1) : habit.streak + 1;
+        changed = true;
+        return { ...habit, completedDates, streak };
+      });
 
-    let changed = false;
-    const updatedHabits = goal.habits.map(habit => {
-      if (habit.id !== habitId) return habit;
-      const isCompleted = habit.completedDates.includes(today);
-      const completedDates = isCompleted
-        ? habit.completedDates.filter(date => date !== today)
-        : [...habit.completedDates, today];
-      const streak = isCompleted ? Math.max(0, habit.streak - 1) : habit.streak + 1;
-      changed = true;
-      return { ...habit, completedDates, streak };
-    });
+      if (!changed) return;
 
-    if (!changed) return;
+      const updatedGoal: Goal = { ...goal, habits: updatedHabits };
+      handleUpdateGoal(updatedGoal);
+      return;
+    }
 
-    const updatedGoal: Goal = { ...goal, habits: updatedHabits };
-    handleUpdateGoal(updatedGoal);
+    setScheduleTasks(prev =>
+      prev.map(habit => {
+        if (habit.id !== habitId) return habit;
+        const isCompleted = habit.completedDates.includes(today);
+        const completedDates = isCompleted
+          ? habit.completedDates.filter(date => date !== today)
+          : [...habit.completedDates, today];
+        const streak = isCompleted ? Math.max(0, habit.streak - 1) : habit.streak + 1;
+        return { ...habit, completedDates, streak };
+      })
+    );
   };
 
   const handleUpdateHabitSchedule = (habitId: string, updates: Partial<Habit>) => {
     const goal = goals.find(g => g.habits.some(h => h.id === habitId));
-    if (!goal) return;
+    if (goal) {
+      const updatedHabits = goal.habits.map(h =>
+        h.id === habitId ? { ...h, ...updates } : h
+      );
 
-    const updatedHabits = goal.habits.map(h =>
-      h.id === habitId ? { ...h, ...updates } : h
-    );
-
-    const updatedGoal: Goal = { ...goal, habits: updatedHabits };
-    handleUpdateGoal(updatedGoal);
-  };
-
-  const handleCreateHabitFromSchedule = (timeOfDay: string, duration: number, title: string) => {
-    if (goals.length === 0) {
-      window.alert('Create a goal first, then you can add tasks to your schedule.');
+      const updatedGoal: Goal = { ...goal, habits: updatedHabits };
+      handleUpdateGoal(updatedGoal);
       return;
     }
 
-    const targetGoal = goals[0];
+    setScheduleTasks(prev =>
+      prev.map(h => (h.id === habitId ? { ...h, ...updates } : h))
+    );
+  };
 
+  const handleCreateHabitFromSchedule = (timeOfDay: string, duration: number, title: string) => {
     const newHabit: Habit = {
       id: uuidv4(),
       title,
@@ -155,20 +181,22 @@ const App: React.FC = () => {
       timeOfDay,
     };
 
-    const updatedGoal: Goal = { ...targetGoal, habits: [...targetGoal.habits, newHabit] };
-    handleUpdateGoal(updatedGoal);
+    setScheduleTasks(prev => [...prev, newHabit]);
   };
 
   const handleDeleteHabitFromSchedule = (habitId: string) => {
     const goal = goals.find(g => g.habits.some(h => h.id === habitId));
-    if (!goal) return;
+    if (goal) {
+      const updatedGoal: Goal = {
+        ...goal,
+        habits: goal.habits.filter(h => h.id !== habitId),
+      };
 
-    const updatedGoal: Goal = {
-      ...goal,
-      habits: goal.habits.filter(h => h.id !== habitId),
-    };
+      handleUpdateGoal(updatedGoal);
+      return;
+    }
 
-    handleUpdateGoal(updatedGoal);
+    setScheduleTasks(prev => prev.filter(habit => habit.id !== habitId));
   };
 
   const handleAddGoal = async (goal: Goal) => {
@@ -378,6 +406,7 @@ const App: React.FC = () => {
         {view === 'schedule' && (
           <DailySchedule
             goals={goals}
+            scheduleTasks={scheduleTasks}
             onToggleHabit={handleToggleHabitCompletion}
             onUpdateHabitSchedule={handleUpdateHabitSchedule}
             onCreateHabit={handleCreateHabitFromSchedule}

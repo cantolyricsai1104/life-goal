@@ -5,6 +5,7 @@ import { format, addDays, startOfWeek, isSameDay, parseISO } from 'date-fns';
 
 interface DailyScheduleProps {
   goals: Goal[];
+  scheduleTasks: Habit[];
   onToggleHabit: (habitId: string) => void;
   onUpdateHabitSchedule: (habitId: string, updates: Partial<Habit>) => void;
   onCreateHabit: (timeOfDay: string, duration: number, title: string) => void;
@@ -75,6 +76,7 @@ const formatSeconds = (seconds: number) => {
 
 export const DailySchedule: React.FC<DailyScheduleProps> = ({
   goals,
+  scheduleTasks,
   onToggleHabit,
   onUpdateHabitSchedule,
   onCreateHabit,
@@ -106,8 +108,6 @@ export const DailySchedule: React.FC<DailyScheduleProps> = ({
     
     goals.forEach(goal => {
       goal.habits.forEach(habit => {
-        // For now, assume all habits are daily or check frequency
-        // In a real app, we'd check habit.frequency === 'daily' or specific days
         if (habit.frequency === 'daily' || habit.frequency === 'weekly') {
           habits.push({
             habit,
@@ -118,13 +118,20 @@ export const DailySchedule: React.FC<DailyScheduleProps> = ({
       });
     });
 
-    // Sort by time
+    scheduleTasks.forEach(habit => {
+      habits.push({
+        habit,
+        goalColor: 'bg-slate-400',
+        goalAspect: LifeAspect.HEALTH,
+      });
+    });
+
     return habits.sort((a, b) => {
       const timeA = a.habit.timeOfDay || '00:00';
       const timeB = b.habit.timeOfDay || '00:00';
       return timeA.localeCompare(timeB);
     });
-  }, [goals, selectedDate]);
+  }, [goals, scheduleTasks, selectedDate]);
 
   useEffect(() => {
     const update = () => {
