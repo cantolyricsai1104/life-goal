@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Goal, Habit, LifeAspect, ASPECT_COLORS, ASPECT_TEXT_COLORS } from '../types';
-import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Check, MoreHorizontal, Timer as TimerIcon } from './Icons';
+import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Check, MoreHorizontal, Timer as TimerIcon, Play, Pause } from './Icons';
 import { format, addDays, startOfWeek, isSameDay, parseISO } from 'date-fns';
 
 interface DailyScheduleProps {
@@ -588,9 +588,42 @@ export const DailySchedule: React.FC<DailyScheduleProps> = ({
                       <Check className="w-3 h-3" />
                     </button>
                     {inlineTimer && (
-                      <span className="text-[10px] font-semibold text-emerald-600">
-                        {formatSeconds(inlineTimer.remaining)}
-                      </span>
+                      <div className="flex items-center gap-1 text-[10px] font-semibold text-emerald-600">
+                        <button
+                          type="button"
+                          className="w-4 h-4 flex items-center justify-center rounded-full bg-emerald-50 hover:bg-emerald-100 border border-emerald-200"
+                          onClick={event => {
+                            event.stopPropagation();
+                            const baseSeconds = (habit.recommendedDuration ?? 20) * 60;
+                            setInlineTimers(prev => {
+                              const current = prev[habit.id];
+                              if (!current || current.remaining <= 0) {
+                                return {
+                                  ...prev,
+                                  [habit.id]: {
+                                    remaining: baseSeconds,
+                                    running: true,
+                                  },
+                                };
+                              }
+                              return {
+                                ...prev,
+                                [habit.id]: {
+                                  remaining: current.remaining,
+                                  running: !current.running,
+                                },
+                              };
+                            });
+                          }}
+                        >
+                          {inlineTimer.running && inlineTimer.remaining > 0 ? (
+                            <Pause className="w-2 h-2 text-emerald-600" />
+                          ) : (
+                            <Play className="w-2 h-2 text-emerald-600 translate-x-[1px]" />
+                          )}
+                        </button>
+                        <span>{formatSeconds(inlineTimer.remaining)}</span>
+                      </div>
                     )}
                   </div>
                 </div>
