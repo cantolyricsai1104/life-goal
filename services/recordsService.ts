@@ -1,4 +1,4 @@
-import { supabase } from './supabaseClient'
+import { supabase, isSupabaseConfigured } from './supabaseClient'
 import type { User } from '@supabase/supabase-js'
 
 export type AppRecord = {
@@ -10,6 +10,10 @@ export type AppRecord = {
 }
 
 export async function saveRecord(user: User, type: string, data: unknown) {
+  if (!isSupabaseConfigured || !supabase) {
+    return
+  }
+
   const { error } = await supabase.from('records').insert({
     user_id: user.id,
     type,
@@ -22,6 +26,10 @@ export async function saveRecord(user: User, type: string, data: unknown) {
 }
 
 export async function fetchRecords(user: User): Promise<AppRecord[]> {
+  if (!isSupabaseConfigured || !supabase) {
+    return []
+  }
+
   const { data, error } = await supabase
     .from('records')
     .select('*')
@@ -34,4 +42,3 @@ export async function fetchRecords(user: User): Promise<AppRecord[]> {
 
   return (data as AppRecord[]) ?? []
 }
-

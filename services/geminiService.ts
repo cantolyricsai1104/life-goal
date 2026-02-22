@@ -1,7 +1,13 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { LifeAspect } from '../types';
 
-const ai = new GoogleGenAI({ apiKey: "AIzaSyBcuMx99AVLqjSCIJezpDU5RCyiBHwEWZA" });
+const apiKey = process.env.GEMINI_API_KEY as string | undefined;
+
+if (!apiKey) {
+  throw new Error("Missing GEMINI_API_KEY environment variable");
+}
+
+const ai = new GoogleGenAI({ apiKey });
 
 export interface AIHabit {
   title: string;

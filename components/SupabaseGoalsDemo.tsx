@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { supabase } from '../services/supabaseClient'
+import { supabase, isSupabaseConfigured } from '../services/supabaseClient'
 
 type SimpleGoal = {
   id: string
@@ -13,6 +13,25 @@ export const SupabaseGoalsDemo: React.FC = () => {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [newTitle, setNewTitle] = useState('')
+
+  if (!isSupabaseConfigured) {
+    return (
+      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-2">
+        <h3 className="text-sm font-bold text-slate-700">Supabase Goals Demo</h3>
+        <p className="text-xs text-slate-500">
+          Supabase is not configured. Add
+          {' '}
+          VITE_SUPABASE_URL
+          {' '}
+          and
+          {' '}
+          VITE_SUPABASE_ANON_KEY
+          {' '}
+          to your environment to enable this section.
+        </p>
+      </div>
+    )
+  }
 
   useEffect(() => {
     const loadGoals = async () => {
@@ -125,4 +144,3 @@ export const SupabaseGoalsDemo: React.FC = () => {
     </div>
   )
 }
-

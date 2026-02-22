@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { supabase } from '../services/supabaseClient'
+import { supabase, isSupabaseConfigured } from '../services/supabaseClient'
 import { useAuth } from '../contexts/AuthContext'
 
 export const AuthPanel: React.FC = () => {
@@ -9,6 +9,22 @@ export const AuthPanel: React.FC = () => {
   const [mode, setMode] = useState<'login' | 'signup'>('login')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  if (!isSupabaseConfigured) {
+    return (
+      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm text-xs text-slate-500">
+        Supabase authentication is not configured. Add
+        {' '}
+        VITE_SUPABASE_URL
+        {' '}
+        and
+        {' '}
+        VITE_SUPABASE_ANON_KEY
+        {' '}
+        to your environment to enable login and signup.
+      </div>
+    )
+  }
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault()
@@ -106,4 +122,3 @@ export const AuthPanel: React.FC = () => {
     </div>
   )
 }
-
