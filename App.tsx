@@ -103,6 +103,49 @@ const App: React.FC = () => {
     }));
   };
 
+  const handleUpdateHabitSchedule = (habitId: string, updates: Partial<Habit>) => {
+    const goal = goals.find(g => g.habits.some(h => h.id === habitId));
+    if (!goal) return;
+
+    const updatedHabits = goal.habits.map(h =>
+      h.id === habitId ? { ...h, ...updates } : h
+    );
+
+    const updatedGoal: Goal = { ...goal, habits: updatedHabits };
+    handleUpdateGoal(updatedGoal);
+  };
+
+  const handleCreateHabitFromSchedule = (timeOfDay: string, duration: number) => {
+    if (goals.length === 0) return;
+
+    const targetGoal = goals[0];
+
+    const newHabit: Habit = {
+      id: uuidv4(),
+      title: 'New Task',
+      frequency: 'daily',
+      completedDates: [],
+      streak: 0,
+      recommendedDuration: duration,
+      timeOfDay,
+    };
+
+    const updatedGoal: Goal = { ...targetGoal, habits: [...targetGoal.habits, newHabit] };
+    handleUpdateGoal(updatedGoal);
+  };
+
+  const handleDeleteHabitFromSchedule = (habitId: string) => {
+    const goal = goals.find(g => g.habits.some(h => h.id === habitId));
+    if (!goal) return;
+
+    const updatedGoal: Goal = {
+      ...goal,
+      habits: goal.habits.filter(h => h.id !== habitId),
+    };
+
+    handleUpdateGoal(updatedGoal);
+  };
+
   const handleAddGoal = async (goal: Goal) => {
     setGoals(prev => [goal, ...prev]);
 
@@ -308,7 +351,13 @@ const App: React.FC = () => {
         )}
 
         {view === 'schedule' && (
-          <DailySchedule goals={goals} onToggleHabit={habitId => handleTimerComplete(habitId)} />
+          <DailySchedule
+            goals={goals}
+            onToggleHabit={habitId => handleTimerComplete(habitId)}
+            onUpdateHabitSchedule={handleUpdateHabitSchedule}
+            onCreateHabit={handleCreateHabitFromSchedule}
+            onDeleteHabit={handleDeleteHabitFromSchedule}
+          />
         )}
 
         {view === 'goals' && (

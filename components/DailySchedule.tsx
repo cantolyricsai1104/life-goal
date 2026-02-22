@@ -6,11 +6,33 @@ import { format, addDays, startOfWeek, isSameDay, parseISO } from 'date-fns';
 interface DailyScheduleProps {
   goals: Goal[];
   onToggleHabit: (habitId: string) => void;
+  onUpdateHabitSchedule: (habitId: string, updates: Partial<Habit>) => void;
+  onCreateHabit: (timeOfDay: string, duration: number) => void;
+  onDeleteHabit: (habitId: string) => void;
 }
 
-export const DailySchedule: React.FC<DailyScheduleProps> = ({ goals, onToggleHabit }) => {
+type InteractionMode = 'move' | 'resize-top' | 'resize-bottom';
+
+interface InteractionState {
+  habitId: string;
+  mode: InteractionMode;
+  startY: number;
+  startMinutes: number;
+  startDuration: number;
+}
+
+export const DailySchedule: React.FC<DailyScheduleProps> = ({
+  goals,
+  onToggleHabit,
+  onUpdateHabitSchedule,
+  onCreateHabit,
+  onDeleteHabit,
+}) => {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const timelineRef = useRef<HTMLDivElement>(null);
+  const [interaction, setInteraction] = useState<InteractionState | null>(null);
+  const [tempEdits, setTempEdits] = useState<Record<string, { timeOfDay: string; duration: number }>>({});
 
   // Generate days for the week view
   const weekDays = useMemo(() => {
@@ -58,7 +80,140 @@ export const DailySchedule: React.FC<DailyScheduleProps> = ({ goals, onToggleHab
 
   const getHabitPosition = (time: string) => {
     const [hours, minutes] = time.split(':').map(Number);
-    return (hours * 60) + minutes; // Position in pixels (1min = 1px height for simplicity, or scale it)
+    return (hours * 60) + minutes;
+  };
+
+  const timeToMinutes = (time: string) => {
+    const [h, m] = time.split(':').map(Number);
+    return h * 60 + m;
+  };
+
+  const minutesToTime = (minutes: number) => {
+    const clamped = Math.max(0, Math.min(24 * 60, minutes));
+    const h = Math.floor(clamped / 60);
+    const m = clamped % 60;
+    return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+  };
+
+  const snapMinutes = (minutes: number) => {
+    const snapped = Math.round(minutes / 15) * 15;
+    return Math.max(0, Math.min(24 * 60, snapped));
+  };
+
+  const getHabitDisplay = (habit: Habit) => {
+    const override = tempEdits[habit.id];
+    const sourceTime = override?.timeOfDay ?? habit.timeOfDay ?? '00:00';
+    const minutes = timeToMinutes(sourceTime);
+    const duration = Math.max(override?.duration ?? habit.recommendedDuration ?? 60, 15);
+    return { minutes, duration, timeOfDay: sourceTime };
+  };
+
+  const startInteraction = (
+    habitId: string,
+    mode: InteractionMode,
+    clientY: number,
+    startMinutes: number,
+    duration: number
+  ) => {
+    setInteraction({
+      habitId,
+      mode,
+      startY: clientY,
+      startMinutes,
+      startDuration: duration,
+    });
+    setTempEdits(prev => ({
+      ...prev,
+      [habitId]: {
+        timeOfDay: minutesToTime(startMinutes),
+        duration,
+      },
+    }));
+  };
+
+  useEffect(() => {
+    if (!interaction) return;
+
+    const handleMove = (event: MouseEvent) => {
+      const deltaY = event.clientY - interaction.startY;
+      const deltaMinutes = snapMinutes(interaction.startMinutes + deltaY) - interaction.startMinutes;
+
+      if (!tempEdits[interaction.habitId]) {
+        return;
+      }
+
+      if (interaction.mode === 'move') {
+        const newStart = snapMinutes(interaction.startMinutes + deltaY);
+        const maxStart = 24 * 60 - interaction.startDuration;
+        const clampedStart = Math.max(0, Math.min(maxStart, newStart));
+        setTempEdits(prev => ({
+          ...prev,
+          [interaction.habitId]: {
+            timeOfDay: minutesToTime(clampedStart),
+            duration: prev[interaction.habitId].duration,
+          },
+        }));
+      } else if (interaction.mode === 'resize-bottom') {
+        const newDuration = Math.max(15, interaction.startDuration + deltaMinutes);
+        const maxDuration = 24 * 60 - interaction.startMinutes;
+        const clampedDuration = Math.max(15, Math.min(maxDuration, snapMinutes(newDuration)));
+        setTempEdits(prev => ({
+          ...prev,
+          [interaction.habitId]: {
+            timeOfDay: prev[interaction.habitId].timeOfDay,
+            duration: clampedDuration,
+          },
+        }));
+      } else if (interaction.mode === 'resize-top') {
+        const newStartRaw = interaction.startMinutes + deltaMinutes;
+        const newStart = snapMinutes(newStartRaw);
+        const maxStart = interaction.startMinutes + interaction.startDuration - 15;
+        const clampedStart = Math.max(0, Math.min(maxStart, newStart));
+        const newDuration = interaction.startMinutes + interaction.startDuration - clampedStart;
+        setTempEdits(prev => ({
+          ...prev,
+          [interaction.habitId]: {
+            timeOfDay: minutesToTime(clampedStart),
+            duration: Math.max(15, snapMinutes(newDuration)),
+          },
+        }));
+      }
+    };
+
+    const handleUp = () => {
+      const current = tempEdits[interaction.habitId];
+      if (current) {
+        onUpdateHabitSchedule(interaction.habitId, {
+          timeOfDay: current.timeOfDay,
+          recommendedDuration: current.duration,
+        });
+        setTempEdits(prev => {
+          const next = { ...prev };
+          delete next[interaction.habitId];
+          return next;
+        });
+      }
+      setInteraction(null);
+    };
+
+    window.addEventListener('mousemove', handleMove);
+    window.addEventListener('mouseup', handleUp);
+
+    return () => {
+      window.removeEventListener('mousemove', handleMove);
+      window.removeEventListener('mouseup', handleUp);
+    };
+  }, [interaction, onUpdateHabitSchedule, tempEdits]);
+
+  const handleTimelineClick = (event: React.MouseEvent<HTMLDivElement>) => {
+    if (!timelineRef.current) return;
+    const rect = timelineRef.current.getBoundingClientRect();
+    const y = event.clientY - rect.top;
+    const minutes = snapMinutes(y);
+    const maxStart = 24 * 60 - 60;
+    const startMinutes = Math.max(0, Math.min(maxStart, minutes));
+    const timeOfDay = minutesToTime(startMinutes);
+    onCreateHabit(timeOfDay, 60);
   };
 
   // Group habits by hour to avoid overlap or just list them
@@ -137,7 +292,11 @@ export const DailySchedule: React.FC<DailyScheduleProps> = ({ goals, onToggleHab
         )}
 
         {/* Hours Grid */}
-        <div className="relative min-h-[1440px]"> {/* 24h * 60px/h = 1440px */}
+        <div
+          ref={timelineRef}
+          className="relative min-h-[1440px]"
+          onClick={handleTimelineClick}
+        >
           {hours.map(hour => (
             <div key={hour} className="absolute w-full flex" style={{ top: `${hour * 60}px`, height: '60px' }}>
               {/* Time Label */}
@@ -160,12 +319,28 @@ export const DailySchedule: React.FC<DailyScheduleProps> = ({ goals, onToggleHab
             
             if (!habit.timeOfDay) return null;
 
-            const [h, m] = habit.timeOfDay.split(':').map(Number);
-            const top = (h * 60) + m;
-            const duration = habit.recommendedDuration || 60; // Default 60 mins height
-            const height = Math.max(duration, 30); // Min height 30px
+            const { minutes, duration, timeOfDay } = getHabitDisplay(habit);
+            const top = minutes;
+            const height = Math.max(duration, 30);
 
             const isCompleted = habit.completedDates.includes(format(selectedDate, 'yyyy-MM-dd'));
+
+            const handleEventMouseDown = (event: React.MouseEvent<HTMLDivElement>) => {
+              if (event.button !== 0) return;
+              event.preventDefault();
+              event.stopPropagation();
+              startInteraction(habit.id, 'move', event.clientY, minutes, duration);
+            };
+
+            const handleResizeMouseDown = (
+              event: React.MouseEvent<HTMLDivElement>,
+              mode: InteractionMode
+            ) => {
+              if (event.button !== 0) return;
+              event.preventDefault();
+              event.stopPropagation();
+              startInteraction(habit.id, mode, event.clientY, minutes, duration);
+            };
 
             return (
               <div
@@ -180,17 +355,39 @@ export const DailySchedule: React.FC<DailyScheduleProps> = ({ goals, onToggleHab
                   height: `${height}px`,
                   zIndex: 10
                 }}
-                onClick={() => onToggleHabit(habit.id)}
+                onMouseDown={handleEventMouseDown}
+                onDoubleClick={(event) => {
+                  event.stopPropagation();
+                  onToggleHabit(habit.id);
+                }}
               >
+                <div
+                  className="absolute inset-x-0 top-0 h-1 cursor-n-resize"
+                  onMouseDown={(event) => handleResizeMouseDown(event, 'resize-top')}
+                />
+                <div
+                  className="absolute inset-x-0 bottom-0 h-1 cursor-s-resize"
+                  onMouseDown={(event) => handleResizeMouseDown(event, 'resize-bottom')}
+                />
                 <div className="flex justify-between items-start h-full">
                   <div className="flex flex-col h-full justify-between">
                     <span className={`font-semibold ${ASPECT_TEXT_COLORS[goalAspect]}`}>
                       {habit.title}
                     </span>
                     <span className="text-slate-500 text-[10px]">
-                      {habit.timeOfDay} - {format(new Date().setHours(h, m + duration), 'h:mm a')}
+                      {timeOfDay} - {format(new Date().setHours(Math.floor(minutes / 60), (minutes % 60) + duration), 'h:mm a')}
                     </span>
                   </div>
+                  <button
+                    type="button"
+                    className="ml-2 text-slate-400 hover:text-slate-600"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onDeleteHabit(habit.id);
+                    }}
+                  >
+                    <MoreHorizontal className="w-4 h-4" />
+                  </button>
                   {isCompleted && (
                     <div className={`rounded-full p-1 ${goalColor} text-white`}>
                         <Check className="w-3 h-3" />
