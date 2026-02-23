@@ -207,8 +207,8 @@ const App: React.FC = () => {
     }
   };
 
-  const handleToggleHabitCompletion = (habitId: string) => {
-    const today = format(new Date(), 'yyyy-MM-dd');
+  const handleToggleHabitCompletion = (habitId: string, dateStr?: string) => {
+    const today = dateStr ?? format(new Date(), 'yyyy-MM-dd');
 
     const goal = goals.find(g => g.habits.some(h => h.id === habitId));
     if (goal) {

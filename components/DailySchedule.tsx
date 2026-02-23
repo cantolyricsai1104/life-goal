@@ -6,7 +6,7 @@ import { format, addDays, startOfWeek, isSameDay, parseISO } from 'date-fns';
 interface DailyScheduleProps {
   goals: Goal[];
   scheduleTasks: Habit[];
-  onToggleHabit: (habitId: string) => void;
+  onToggleHabit: (habitId: string, dateStr?: string) => void;
   onUpdateHabitSchedule: (habitId: string, updates: Partial<Habit>) => void;
   onCreateHabit: (timeOfDay: string, duration: number, title: string) => void;
   onDeleteHabit: (habitId: string) => void;
@@ -95,6 +95,7 @@ export const DailySchedule: React.FC<DailyScheduleProps> = ({
     minutes: getHongKongMinutes(),
     label: getHongKongLabel(),
   }));
+  const selectedDateStr = format(selectedDate, 'yyyy-MM-dd');
 
   // Generate days for the week view
   const weekDays = useMemo(() => {
@@ -496,7 +497,7 @@ export const DailySchedule: React.FC<DailyScheduleProps> = ({
             const top = minutes;
             const height = Math.max(duration, 30);
 
-            const isCompleted = habit.completedDates.includes(format(selectedDate, 'yyyy-MM-dd'));
+            const isCompleted = habit.completedDates.includes(selectedDateStr);
             const inlineTimer = inlineTimers[habit.id];
 
             const handleEventMouseDown = (event: React.MouseEvent<HTMLDivElement>) => {
@@ -546,7 +547,7 @@ export const DailySchedule: React.FC<DailyScheduleProps> = ({
                 onContextMenu={handleEventContextMenu}
                 onDoubleClick={(event) => {
                   event.stopPropagation();
-                  onToggleHabit(habit.id);
+                  onToggleHabit(habit.id, selectedDateStr);
                 }}
               >
                 <div
@@ -589,7 +590,7 @@ export const DailySchedule: React.FC<DailyScheduleProps> = ({
                       }`}
                       onClick={(event) => {
                         event.stopPropagation();
-                        onToggleHabit(habit.id);
+                        onToggleHabit(habit.id, selectedDateStr);
                       }}
                     >
                       <Check className="w-3 h-3" />
