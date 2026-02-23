@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { Goal, ASPECT_TEXT_COLORS, ASPECT_COLORS, Habit } from '../types';
 import { AspectIcon, ChevronRight, Trash2, Sparkles, Check } from './Icons';
 import { HabitTracker } from './HabitTracker';
-import { getAdviceForGoal } from '../services/geminiService';
+import { getAdviceForGoal, getGeminiErrorMessage } from '../services/geminiService';
 import { ActivityCalendar } from './ActivityCalendar';
 
 interface GoalCardProps {
@@ -78,6 +78,7 @@ export const GoalCard: React.FC<GoalCardProps> = ({ goal, onUpdateGoal, onDelete
       onUpdateGoal({ ...goal, aiAdvice: advice });
     } catch (err) {
       console.error(err);
+      alert(getGeminiErrorMessage(err));
     } finally {
       setAdviceLoading(false);
     }

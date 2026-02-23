@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Sparkles, Plus } from './Icons';
-import { generateGoalPlan, AIPlanResponse } from '../services/geminiService';
+import { generateGoalPlan, AIPlanResponse, getGeminiErrorMessage } from '../services/geminiService';
 import { LifeAspect, Goal, Habit, Milestone } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -22,7 +22,7 @@ export const GoalWizard: React.FC<GoalWizardProps> = ({ onAddGoal, onClose }) =>
       setPlan(result);
     } catch (e) {
       console.error("Failed to generate plan", e);
-      alert("AI is taking a nap. Try again momentarily.");
+      alert(getGeminiErrorMessage(e));
     } finally {
       setLoading(false);
     }

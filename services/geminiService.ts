@@ -1,13 +1,24 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { LifeAspect } from '../types';
 
-const apiKey = process.env.GEMINI_API_KEY as string | undefined;
+const getClient = () => {
+  const apiKey = process.env.GEMINI_API_KEY as string | undefined;
+  if (!apiKey) {
+    throw new Error('GEMINI_API_KEY_MISSING');
+  }
+  return new GoogleGenAI({ apiKey });
+};
 
-if (!apiKey) {
-  throw new Error("Missing GEMINI_API_KEY environment variable");
-}
-
-const ai = new GoogleGenAI({ apiKey });
+export const getGeminiErrorMessage = (error: unknown) => {
+  const rawMessage = error instanceof Error ? error.message : String(error);
+  if (rawMessage.includes('GEMINI_API_KEY_MISSING') || rawMessage.includes('Missing GEMINI_API_KEY')) {
+    return 'Missing GEMINI_API_KEY. Add a new key to .env.local and restart the app.';
+  }
+  if (rawMessage.includes('leaked') || rawMessage.includes('PERMISSION_DENIED')) {
+    return 'Your Gemini API key was revoked. Replace it in .env.local and restart the app.';
+  }
+  return 'AI is taking a nap. Try again momentarily.';
+};
 
 export interface AIHabit {
   title: string;
@@ -25,6 +36,7 @@ export interface AIPlanResponse {
 
 export const generateGoalPlan = async (userDream: string): Promise<AIPlanResponse> => {
   const modelId = "gemini-3-flash-preview";
+  const ai = getClient();
   
   const prompt = `
     The user has a vague dream or goal: "${userDream}".
@@ -89,6 +101,7 @@ export const generateGoalPlan = async (userDream: string): Promise<AIPlanRespons
 
 export const getAdviceForGoal = async (goalTitle: string, currentProgress: number): Promise<string> => {
     const modelId = "gemini-3-flash-preview";
+    const ai = getClient();
     const prompt = `
       I am currently working on this goal: "${goalTitle}".
       My progress is at ${currentProgress}%.

@@ -758,18 +758,6 @@ const App: React.FC = () => {
 
         {view === 'schedule' && (
           <div className="space-y-4">
-            <div className="bg-white border border-slate-200 rounded-2xl px-4 py-3 text-xs text-slate-600 flex flex-wrap items-center gap-x-4 gap-y-2">
-              <span className="font-semibold text-slate-700">Debug</span>
-              <span>Logged in: {user ? 'yes' : 'no'}</span>
-              <span>User ID: {user?.id ?? 'none'}</span>
-              <span>Supabase: {isSupabaseConfigured ? 'configured' : 'not configured'}</span>
-              <span>Goals: {goals.length}</span>
-              <span>Schedule tasks: {scheduleTasks.length}</span>
-              <span>Last goals save: {lastGoalsPersistAt ? new Date(lastGoalsPersistAt).toLocaleTimeString() : 'none'}</span>
-              <span>Last schedule save: {lastSchedulePersistAt ? new Date(lastSchedulePersistAt).toLocaleTimeString() : 'none'}</span>
-              <span>Local schedule updated: {localScheduleUpdatedAt ? new Date(localScheduleUpdatedAt).toLocaleTimeString() : 'none'}</span>
-              <span>Remote schedule updated: {remoteScheduleUpdatedAt ? new Date(remoteScheduleUpdatedAt).toLocaleTimeString() : 'none'}</span>
-            </div>
             <DailySchedule
               goals={goals}
               scheduleTasks={scheduleTasks}
