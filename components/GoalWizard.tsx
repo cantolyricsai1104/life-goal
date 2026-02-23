@@ -56,6 +56,10 @@ export const GoalWizard: React.FC<GoalWizardProps> = ({ onAddGoal, onClose }) =>
     onClose();
   };
 
+  const handleBack = () => {
+    setPlan(null);
+  };
+
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]">
@@ -149,22 +153,39 @@ export const GoalWizard: React.FC<GoalWizardProps> = ({ onAddGoal, onClose }) =>
           )}
         </div>
 
-        <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-3">
+        <div className="p-4 border-t border-slate-100 bg-slate-50 flex items-center justify-between gap-3">
           <button
             onClick={onClose}
             className="px-4 py-2 text-slate-600 hover:text-slate-900 font-medium"
           >
             Cancel
           </button>
-          {plan && (
+          <div className="flex items-center gap-2">
             <button
-              onClick={handleConfirm}
-              className="px-6 py-2 bg-violet-600 hover:bg-violet-700 text-white rounded-lg font-medium shadow-md shadow-violet-200 transition-all flex items-center gap-2"
+              onClick={handleBack}
+              disabled={!plan}
+              className="px-4 py-2 text-slate-600 hover:text-slate-900 font-medium disabled:text-slate-300"
             >
-              <Plus className="w-4 h-4" />
-              Adopt This Plan
+              Back
             </button>
-          )}
+            <button
+              onClick={plan ? handleConfirm : handleGenerate}
+              disabled={loading || (!plan && !input.trim())}
+              className="px-6 py-2 bg-violet-600 hover:bg-violet-700 disabled:opacity-50 text-white rounded-lg font-medium shadow-md shadow-violet-200 transition-all flex items-center gap-2"
+            >
+              {plan ? (
+                <>
+                  <Plus className="w-4 h-4" />
+                  Next
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-4 h-4" />
+                  Next
+                </>
+              )}
+            </button>
+          </div>
         </div>
       </div>
     </div>
