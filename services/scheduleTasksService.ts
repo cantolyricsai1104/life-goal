@@ -10,14 +10,19 @@ type ScheduleTaskRow = {
   updated_at: string
 }
 
-export async function fetchUserScheduleTasks(user: User): Promise<Habit[]> {
+export type ScheduleTasksSnapshot = {
+  tasks: Habit[]
+  latestUpdatedAt: number | null
+}
+
+export async function fetchUserScheduleTasks(user: User): Promise<ScheduleTasksSnapshot> {
   if (!isSupabaseConfigured || !supabase) {
-    return []
+    return { tasks: [], latestUpdatedAt: null }
   }
 
   const { data, error } = await supabase
     .from('app_schedule_tasks')
-    .select('payload')
+    .select('payload, updated_at')
     .eq('user_id', user.id)
     .order('created_at', { ascending: false })
 
@@ -25,8 +30,15 @@ export async function fetchUserScheduleTasks(user: User): Promise<Habit[]> {
     throw error
   }
 
-  const rows = (data ?? []) as { payload: Habit }[]
-  return rows.map((row) => row.payload)
+  const rows = (data ?? []) as { payload: Habit; updated_at: string | null }[]
+  const tasks = rows.map((row) => row.payload)
+  const latestUpdatedAt = rows.reduce<number | null>((acc, row) => {
+    if (!row.updated_at) return acc
+    const value = Date.parse(row.updated_at)
+    if (Number.isNaN(value)) return acc
+    return acc === null ? value : Math.max(acc, value)
+  }, null)
+  return { tasks, latestUpdatedAt }
 }
 
 export async function upsertUserScheduleTask(user: User, task: Habit): Promise<void> {

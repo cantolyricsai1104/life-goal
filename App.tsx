@@ -75,23 +75,40 @@ const persistGoalsToStorage = (userId: string | null | undefined, nextGoals: Goa
   }
 };
 
-const loadScheduleTasksFromStorage = (userId: string | null | undefined): Habit[] => {
-  if (typeof window === 'undefined' || !userId) return [];
+type ScheduleTasksLocalSnapshot = {
+  tasks: Habit[];
+  updatedAt: number | null;
+};
+
+const loadScheduleTasksFromStorage = (userId: string | null | undefined): ScheduleTasksLocalSnapshot => {
+  if (typeof window === 'undefined' || !userId) return { tasks: [], updatedAt: null };
   const raw = window.localStorage.getItem(scheduleStorageKey(userId));
-  if (!raw) return [];
+  if (!raw) return { tasks: [], updatedAt: null };
   try {
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? (parsed as Habit[]) : [];
+    if (Array.isArray(parsed)) {
+      return { tasks: parsed as Habit[], updatedAt: null };
+    }
+    const tasks = Array.isArray(parsed?.tasks) ? (parsed.tasks as Habit[]) : [];
+    const updatedAt = typeof parsed?.updatedAt === 'number' ? parsed.updatedAt : null;
+    return { tasks, updatedAt };
   } catch (error) {
     console.error('Failed to parse schedule tasks from localStorage', error);
-    return [];
+    return { tasks: [], updatedAt: null };
   }
 };
 
-const persistScheduleTasksToStorage = (userId: string | null | undefined, tasks: Habit[]) => {
+const persistScheduleTasksToStorage = (
+  userId: string | null | undefined,
+  tasks: Habit[],
+  updatedAt: number
+) => {
   if (typeof window === 'undefined' || !userId) return;
   try {
-    window.localStorage.setItem(scheduleStorageKey(userId), JSON.stringify(tasks));
+    window.localStorage.setItem(
+      scheduleStorageKey(userId),
+      JSON.stringify({ updatedAt, tasks })
+    );
   } catch (error) {
     console.error('Failed to persist schedule tasks to localStorage', error);
   }
@@ -109,6 +126,8 @@ const App: React.FC = () => {
   const { user, loading } = useAuth();
   const [lastGoalsPersistAt, setLastGoalsPersistAt] = useState<number | null>(null);
   const [lastSchedulePersistAt, setLastSchedulePersistAt] = useState<number | null>(null);
+  const [localScheduleUpdatedAt, setLocalScheduleUpdatedAt] = useState<number | null>(null);
+  const [remoteScheduleUpdatedAt, setRemoteScheduleUpdatedAt] = useState<number | null>(null);
 
   const handleLogout = async () => {
     if (!isSupabaseConfigured || !supabase) return;
@@ -128,14 +147,22 @@ const App: React.FC = () => {
       }
 
       const localGoals = loadGoalsFromStorage(user.id);
-      const localScheduleTasks = loadScheduleTasksFromStorage(user.id);
+      const localScheduleSnapshot = loadScheduleTasksFromStorage(user.id);
+      setLocalScheduleUpdatedAt(localScheduleSnapshot.updatedAt);
       try {
         const [remoteGoals, remoteTasks] = await Promise.all([
           fetchUserGoals(user),
           fetchUserScheduleTasks(user),
         ]);
         setGoals(remoteGoals.length > 0 ? remoteGoals : localGoals);
-        setScheduleTasks(remoteTasks.length > 0 ? remoteTasks : localScheduleTasks);
+        setRemoteScheduleUpdatedAt(remoteTasks.latestUpdatedAt);
+        const shouldPreferLocal =
+          localScheduleSnapshot.tasks.length > 0 &&
+          (remoteTasks.tasks.length === 0 ||
+            (localScheduleSnapshot.updatedAt !== null &&
+              (!remoteTasks.latestUpdatedAt ||
+                localScheduleSnapshot.updatedAt >= remoteTasks.latestUpdatedAt)));
+        setScheduleTasks(shouldPreferLocal ? localScheduleSnapshot.tasks : remoteTasks.tasks);
       } catch (error) {
         console.error('Failed to load data from Supabase', error);
       }
@@ -146,8 +173,10 @@ const App: React.FC = () => {
 
   useEffect(() => {
     if (!user) return;
-    persistScheduleTasksToStorage(user.id, scheduleTasks);
-    setLastSchedulePersistAt(Date.now());
+    const updatedAt = Date.now();
+    persistScheduleTasksToStorage(user.id, scheduleTasks, updatedAt);
+    setLastSchedulePersistAt(updatedAt);
+    setLocalScheduleUpdatedAt(updatedAt);
   }, [scheduleTasks, user]);
 
   useEffect(() => {
@@ -546,6 +575,8 @@ const App: React.FC = () => {
               <span>Schedule tasks: {scheduleTasks.length}</span>
               <span>Last goals save: {lastGoalsPersistAt ? new Date(lastGoalsPersistAt).toLocaleTimeString() : 'none'}</span>
               <span>Last schedule save: {lastSchedulePersistAt ? new Date(lastSchedulePersistAt).toLocaleTimeString() : 'none'}</span>
+              <span>Local schedule updated: {localScheduleUpdatedAt ? new Date(localScheduleUpdatedAt).toLocaleTimeString() : 'none'}</span>
+              <span>Remote schedule updated: {remoteScheduleUpdatedAt ? new Date(remoteScheduleUpdatedAt).toLocaleTimeString() : 'none'}</span>
             </div>
             <DailySchedule
               goals={goals}
