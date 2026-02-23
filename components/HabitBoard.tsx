@@ -9,13 +9,15 @@ export type HabitItem = {
   title: string;
   type: HabitType;
   completedDates: string[];
+  startDate?: string;
+  endDate?: string;
 };
 
 interface HabitBoardProps {
   habits: HabitItem[];
   selectedDate: Date;
   onChangeDate: (next: Date) => void;
-  onAddHabit: (type: HabitType, title: string) => void;
+  onAddHabit: (type: HabitType, title: string, startDate?: string, endDate?: string) => void;
   onToggleHabit: (habitId: string, dateStr: string) => void;
   onRemoveHabit: (habitId: string) => void;
 }
@@ -30,6 +32,11 @@ export const HabitBoard: React.FC<HabitBoardProps> = ({
 }) => {
   const [goodInput, setGoodInput] = useState('');
   const [badInput, setBadInput] = useState('');
+  const todayStr = format(new Date(), 'yyyy-MM-dd');
+  const [goodStart, setGoodStart] = useState(todayStr);
+  const [goodEnd, setGoodEnd] = useState(todayStr);
+  const [badStart, setBadStart] = useState(todayStr);
+  const [badEnd, setBadEnd] = useState(todayStr);
   const selectedDateStr = format(selectedDate, 'yyyy-MM-dd');
 
   const weekDays = useMemo(() => {
@@ -43,19 +50,21 @@ export const HabitBoard: React.FC<HabitBoardProps> = ({
   const handleAddGood = () => {
     const title = goodInput.trim();
     if (!title) return;
-    onAddHabit('good', title);
+    onAddHabit('good', title, goodStart || undefined, goodEnd || undefined);
     setGoodInput('');
   };
 
   const handleAddBad = () => {
     const title = badInput.trim();
     if (!title) return;
-    onAddHabit('bad', title);
+    onAddHabit('bad', title, badStart || undefined, badEnd || undefined);
     setBadInput('');
   };
 
   const renderHabitItem = (habit: HabitItem) => {
     const isCompleted = habit.completedDates.includes(selectedDateStr);
+    const isInRange = (!habit.startDate || habit.startDate <= selectedDateStr) &&
+      (!habit.endDate || habit.endDate >= selectedDateStr);
     return (
       <div
         key={habit.id}
@@ -63,15 +72,25 @@ export const HabitBoard: React.FC<HabitBoardProps> = ({
       >
         <button
           type="button"
-          onClick={() => onToggleHabit(habit.id, selectedDateStr)}
+          onClick={() => {
+            if (!isInRange) return;
+            onToggleHabit(habit.id, selectedDateStr);
+          }}
           className={`w-5 h-5 rounded border flex items-center justify-center ${
             isCompleted ? 'bg-emerald-500 border-emerald-500 text-white' : 'border-slate-300 text-transparent'
-          }`}
+          } ${!isInRange ? 'opacity-40 cursor-not-allowed' : ''}`}
         >
           <Check className="w-3.5 h-3.5" />
         </button>
-        <div className={`flex-1 text-sm ${isCompleted ? 'line-through text-slate-400' : 'text-slate-700'}`}>
-          {habit.title}
+        <div className="flex-1">
+          <div className={`text-sm ${isCompleted ? 'line-through text-slate-400' : 'text-slate-700'}`}>
+            {habit.title}
+          </div>
+          {(habit.startDate || habit.endDate) && (
+            <div className="text-[11px] text-slate-400">
+              {habit.startDate ?? '—'} → {habit.endDate ?? '—'}
+            </div>
+          )}
         </div>
         {isCompleted && (
           <button
@@ -175,6 +194,20 @@ export const HabitBoard: React.FC<HabitBoardProps> = ({
               Add
             </button>
           </div>
+        <div className="grid grid-cols-2 gap-2">
+          <input
+            type="date"
+            value={goodStart}
+            onChange={(event) => setGoodStart(event.target.value)}
+            className="px-3 py-2 rounded-xl border border-emerald-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200"
+          />
+          <input
+            type="date"
+            value={goodEnd}
+            onChange={(event) => setGoodEnd(event.target.value)}
+            className="px-3 py-2 rounded-xl border border-emerald-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200"
+          />
+        </div>
           <div className="space-y-2">
             {goodHabits.length === 0 ? (
               <div className="text-xs text-emerald-600 bg-emerald-50 rounded-xl px-3 py-2">
@@ -208,6 +241,20 @@ export const HabitBoard: React.FC<HabitBoardProps> = ({
               Add
             </button>
           </div>
+        <div className="grid grid-cols-2 gap-2">
+          <input
+            type="date"
+            value={badStart}
+            onChange={(event) => setBadStart(event.target.value)}
+            className="px-3 py-2 rounded-xl border border-rose-200 text-sm focus:outline-none focus:ring-2 focus:ring-rose-200"
+          />
+          <input
+            type="date"
+            value={badEnd}
+            onChange={(event) => setBadEnd(event.target.value)}
+            className="px-3 py-2 rounded-xl border border-rose-200 text-sm focus:outline-none focus:ring-2 focus:ring-rose-200"
+          />
+        </div>
           <div className="space-y-2">
             {badHabits.length === 0 ? (
               <div className="text-xs text-rose-600 bg-rose-50 rounded-xl px-3 py-2">

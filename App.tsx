@@ -349,7 +349,13 @@ const App: React.FC = () => {
     }
   };
 
-  const handleCreateHabitFromSchedule = (timeOfDay: string, duration: number, title: string) => {
+  const handleCreateHabitFromSchedule = (
+    timeOfDay: string,
+    duration: number,
+    title: string,
+    startDate?: string,
+    endDate?: string
+  ) => {
     const newHabit: Habit = {
       id: uuidv4(),
       title,
@@ -358,6 +364,8 @@ const App: React.FC = () => {
       streak: 0,
       recommendedDuration: duration,
       timeOfDay,
+      startDate,
+      endDate,
     };
 
     setScheduleTasks(prev => [...prev, newHabit]);
@@ -390,12 +398,14 @@ const App: React.FC = () => {
     }
   };
 
-  const handleAddHabitItem = (type: 'good' | 'bad', title: string) => {
+  const handleAddHabitItem = (type: 'good' | 'bad', title: string, startDate?: string, endDate?: string) => {
     const next: HabitItem = {
       id: uuidv4(),
       title,
       type,
       completedDates: [],
+      startDate,
+      endDate,
     };
     setHabitItems(prev => [next, ...prev]);
   };

@@ -8,7 +8,7 @@ interface DailyScheduleProps {
   scheduleTasks: Habit[];
   onToggleHabit: (habitId: string, dateStr?: string) => void;
   onUpdateHabitSchedule: (habitId: string, updates: Partial<Habit>) => void;
-  onCreateHabit: (timeOfDay: string, duration: number, title: string) => void;
+  onCreateHabit: (timeOfDay: string, duration: number, title: string, startDate?: string, endDate?: string) => void;
   onDeleteHabit: (habitId: string) => void;
   onStartTimer: (habit: Habit) => void;
 }
@@ -32,6 +32,8 @@ interface ContextMenuState {
   x: number;
   y: number;
   name: string;
+  startDate?: string;
+  endDate?: string;
 }
 
 interface TimerMenuState {
@@ -96,6 +98,11 @@ export const DailySchedule: React.FC<DailyScheduleProps> = ({
     label: getHongKongLabel(),
   }));
   const selectedDateStr = format(selectedDate, 'yyyy-MM-dd');
+  const isWithinRange = (dateStr: string, startDate?: string, endDate?: string) => {
+    if (startDate && dateStr < startDate) return false;
+    if (endDate && dateStr > endDate) return false;
+    return true;
+  };
 
   // Generate days for the week view
   const weekDays = useMemo(() => {
@@ -120,6 +127,9 @@ export const DailySchedule: React.FC<DailyScheduleProps> = ({
     });
 
     scheduleTasks.forEach(habit => {
+      if (!isWithinRange(selectedDateStr, habit.startDate, habit.endDate)) {
+        return;
+      }
       habits.push({
         habit,
         goalColor: 'bg-slate-400',
@@ -297,6 +307,8 @@ export const DailySchedule: React.FC<DailyScheduleProps> = ({
       x: event.clientX,
       y: event.clientY,
       name: 'New Task',
+      startDate: selectedDateStr,
+      endDate: selectedDateStr,
     });
   };
 
@@ -309,11 +321,21 @@ export const DailySchedule: React.FC<DailyScheduleProps> = ({
     setContextMenu({ ...contextMenu, name: value });
   };
 
+  const handleContextStartDateChange = (value: string) => {
+    if (!contextMenu) return;
+    setContextMenu({ ...contextMenu, startDate: value });
+  };
+
+  const handleContextEndDateChange = (value: string) => {
+    if (!contextMenu) return;
+    setContextMenu({ ...contextMenu, endDate: value });
+  };
+
   const handleCreateFromContext = () => {
     if (!contextMenu || contextMenu.target !== 'empty') return;
     const timeOfDay = minutesToTime(contextMenu.minutes);
     const title = contextMenu.name.trim() || 'New Task';
-    onCreateHabit(timeOfDay, 60, title);
+    onCreateHabit(timeOfDay, 60, title, contextMenu.startDate, contextMenu.endDate);
     setContextMenu(null);
   };
 
@@ -328,6 +350,15 @@ export const DailySchedule: React.FC<DailyScheduleProps> = ({
     const title = contextMenu.name.trim();
     if (!title) return;
     onUpdateHabitSchedule(contextMenu.habitId, { title });
+    setContextMenu(null);
+  };
+
+  const handleUpdateRangeFromContext = () => {
+    if (!contextMenu || contextMenu.target !== 'event' || !contextMenu.habitId) return;
+    onUpdateHabitSchedule(contextMenu.habitId, {
+      startDate: contextMenu.startDate,
+      endDate: contextMenu.endDate,
+    });
     setContextMenu(null);
   };
 
@@ -498,6 +529,7 @@ export const DailySchedule: React.FC<DailyScheduleProps> = ({
             const height = Math.max(duration, 30);
 
             const isCompleted = habit.completedDates.includes(selectedDateStr);
+            const isInRange = isWithinRange(selectedDateStr, habit.startDate, habit.endDate);
             const inlineTimer = inlineTimers[habit.id];
 
             const handleEventMouseDown = (event: React.MouseEvent<HTMLDivElement>) => {
@@ -527,6 +559,8 @@ export const DailySchedule: React.FC<DailyScheduleProps> = ({
                 x: event.clientX,
                 y: event.clientY,
                 name: habit.title,
+                startDate: habit.startDate ?? selectedDateStr,
+                endDate: habit.endDate ?? selectedDateStr,
               });
             };
 
@@ -547,6 +581,7 @@ export const DailySchedule: React.FC<DailyScheduleProps> = ({
                 onContextMenu={handleEventContextMenu}
                 onDoubleClick={(event) => {
                   event.stopPropagation();
+                  if (!isInRange) return;
                   onToggleHabit(habit.id, selectedDateStr);
                 }}
               >
@@ -567,6 +602,11 @@ export const DailySchedule: React.FC<DailyScheduleProps> = ({
                       {format(new Date(0, 0, 0, Math.floor(minutes / 60), minutes % 60), 'h:mm a')} -{' '}
                       {format(new Date(0, 0, 0, Math.floor((minutes + duration) / 60), (minutes + duration) % 60), 'h:mm a')}
                     </span>
+                    {(habit.startDate || habit.endDate) && (
+                      <span className="text-slate-400 text-[10px]">
+                        {habit.startDate ?? '—'} → {habit.endDate ?? '—'}
+                      </span>
+                    )}
                   </div>
                   <div className="flex flex-col items-end gap-1 ml-2">
                     <button
@@ -587,9 +627,10 @@ export const DailySchedule: React.FC<DailyScheduleProps> = ({
                       type="button"
                       className={`rounded-full p-1 border ${
                         isCompleted ? `${goalColor} text-white border-transparent` : 'bg-white text-slate-400 border-slate-200'
-                      }`}
+                      } ${!isInRange ? 'opacity-40 cursor-not-allowed' : ''}`}
                       onClick={(event) => {
                         event.stopPropagation();
+                        if (!isInRange) return;
                         onToggleHabit(habit.id, selectedDateStr);
                       }}
                     >
@@ -697,6 +738,20 @@ export const DailySchedule: React.FC<DailyScheduleProps> = ({
               className="w-full border border-slate-200 rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-violet-500"
               placeholder="Task name"
             />
+            <div className="grid grid-cols-2 gap-2">
+              <input
+                type="date"
+                value={contextMenu.startDate ?? ''}
+                onChange={event => handleContextStartDateChange(event.target.value)}
+                className="w-full border border-slate-200 rounded-md px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-violet-500"
+              />
+              <input
+                type="date"
+                value={contextMenu.endDate ?? ''}
+                onChange={event => handleContextEndDateChange(event.target.value)}
+                className="w-full border border-slate-200 rounded-md px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-violet-500"
+              />
+            </div>
             {contextMenu.target === 'empty' && (
               <button
                 type="button"
@@ -708,6 +763,13 @@ export const DailySchedule: React.FC<DailyScheduleProps> = ({
             )}
             {contextMenu.target === 'event' && (
               <div className="space-y-2">
+                <button
+                  type="button"
+                  onClick={handleUpdateRangeFromContext}
+                  className="w-full text-sm font-medium px-3 py-1.5 rounded-md bg-violet-600 text-white hover:bg-violet-700"
+                >
+                  Update dates
+                </button>
                 <button
                   type="button"
                   onClick={handleRenameFromContext}
