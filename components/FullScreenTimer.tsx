@@ -65,11 +65,47 @@ export const FullScreenTimer: React.FC<FullScreenTimerProps> = ({
   const [localUpdatedAt, setLocalUpdatedAt] = useState<number | null>(null);
   const [remoteUpdatedAt, setRemoteUpdatedAt] = useState<number | null>(null);
   const timerRef = useRef<number | null>(null);
+  const [timerEndAt, setTimerEndAt] = useState<number | null>(null);
 
   const createId = () => uuidv4();
 
   const getStorageKey = (habitId: string) => {
     return `timer-memos:${habitId}`;
+  };
+
+  const getTimerStorageKey = (habitId: string) => {
+    const userId = user?.id ?? 'anon';
+    return `timer-state:${userId}:${habitId}`;
+  };
+
+  const loadTimerSnapshot = (habitId: string) => {
+    if (typeof window === 'undefined') return null;
+    const raw = window.localStorage.getItem(getTimerStorageKey(habitId));
+    if (!raw) return null;
+    try {
+      const parsed = JSON.parse(raw) as { timeLeft?: number; isActive?: boolean; endAt?: number | null };
+      const timeLeft = typeof parsed.timeLeft === 'number' ? parsed.timeLeft : null;
+      if (timeLeft === null) return null;
+      return {
+        timeLeft,
+        isActive: Boolean(parsed.isActive),
+        endAt: typeof parsed.endAt === 'number' ? parsed.endAt : null,
+      };
+    } catch {
+      return null;
+    }
+  };
+
+  const persistTimerSnapshot = (habitId: string, nextTimeLeft: number, nextIsActive: boolean, nextEndAt: number | null) => {
+    if (typeof window === 'undefined') return;
+    try {
+      window.localStorage.setItem(
+        getTimerStorageKey(habitId),
+        JSON.stringify({ timeLeft: nextTimeLeft, isActive: nextIsActive, endAt: nextEndAt })
+      );
+    } catch (error) {
+      console.error('Failed to persist timer state to localStorage', error);
+    }
   };
 
   const getLocalSnapshot = (habitId: string) => {
@@ -166,8 +202,30 @@ export const FullScreenTimer: React.FC<FullScreenTimerProps> = ({
 
   useEffect(() => {
     if (isOpen && habit) {
-      setTimeLeft((habit.recommendedDuration || 30) * 60);
-      setIsActive(false);
+      const snapshot = loadTimerSnapshot(habit.id);
+      if (snapshot) {
+        if (snapshot.isActive && snapshot.endAt) {
+          const remaining = Math.max(0, Math.ceil((snapshot.endAt - Date.now()) / 1000));
+          if (remaining === 0) {
+            setTimeLeft(0);
+            setIsActive(false);
+            setTimerEndAt(null);
+            onComplete(habit.id);
+          } else {
+            setTimeLeft(remaining);
+            setIsActive(true);
+            setTimerEndAt(snapshot.endAt);
+          }
+        } else {
+          setTimeLeft(Math.max(0, Math.floor(snapshot.timeLeft)));
+          setIsActive(false);
+          setTimerEndAt(null);
+        }
+      } else {
+        setTimeLeft((habit.recommendedDuration || 30) * 60);
+        setIsActive(false);
+        setTimerEndAt(null);
+      }
       let loadedFromStorage = false;
       if (typeof window !== 'undefined') {
         const key = getStorageKey(habit.id);
@@ -253,7 +311,7 @@ export const FullScreenTimer: React.FC<FullScreenTimerProps> = ({
     } else if (!isOpen) {
       setMemos([]);
     }
-  }, [isOpen, habit, user]);
+  }, [isOpen, habit, user, onComplete]);
 
   useEffect(() => {
     if (!debugOpen || typeof window === 'undefined' || !habit) return;
@@ -267,23 +325,34 @@ export const FullScreenTimer: React.FC<FullScreenTimerProps> = ({
   }, [debugOpen, habit]);
 
   useEffect(() => {
-    if (isActive && timeLeft > 0) {
-      timerRef.current = window.setInterval(() => {
-        setTimeLeft((prev) => prev - 1);
-      }, 1000);
-    } else if (timeLeft === 0 && isActive) {
-      setIsActive(false);
-      if (habit) onComplete(habit.id);
-      if (timerRef.current) clearInterval(timerRef.current);
-    }
-
+    if (!isActive || !timerEndAt) return;
+    timerRef.current = window.setInterval(() => {
+      const remaining = Math.max(0, Math.ceil((timerEndAt - Date.now()) / 1000));
+      setTimeLeft(remaining);
+    }, 1000);
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [isActive, timeLeft, onComplete, habit]);
+  }, [isActive, timerEndAt]);
+
+  useEffect(() => {
+    if (!habit) return;
+    if (isActive && timeLeft === 0) {
+      setIsActive(false);
+      setTimerEndAt(null);
+      onComplete(habit.id);
+    }
+  }, [isActive, timeLeft, habit, onComplete]);
 
   const toggleTimer = () => {
-    setIsActive(!isActive);
+    if (isActive) {
+      setIsActive(false);
+      setTimerEndAt(null);
+      return;
+    }
+    const endAt = Date.now() + timeLeft * 1000;
+    setIsActive(true);
+    setTimerEndAt(endAt);
   };
 
   const formatTime = (seconds: number) => {
@@ -293,8 +362,17 @@ export const FullScreenTimer: React.FC<FullScreenTimerProps> = ({
   };
 
   const addTime = () => {
+    if (isActive && timerEndAt) {
+      setTimerEndAt(timerEndAt + 5 * 60 * 1000);
+      return;
+    }
     setTimeLeft(prev => prev + 5 * 60);
   };
+
+  useEffect(() => {
+    if (!habit) return;
+    persistTimerSnapshot(habit.id, timeLeft, isActive, timerEndAt);
+  }, [habit, timeLeft, isActive, timerEndAt]);
 
   const handleMemoMouseDown = (memo: Memo, event: React.MouseEvent<HTMLDivElement>) => {
     if (event.button !== 0) return;
