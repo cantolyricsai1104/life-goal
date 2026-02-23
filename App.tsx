@@ -12,6 +12,7 @@ import { fetchUserGoals, upsertUserGoal, deleteUserGoal } from './services/goals
 import { fetchUserScheduleTasks, upsertUserScheduleTask, deleteUserScheduleTask } from './services/scheduleTasksService';
 import { supabase, isSupabaseConfigured } from './services/supabaseClient';
 import { v4 as uuidv4 } from 'uuid';
+import { format } from 'date-fns';
 
 const MOCK_GOALS: Goal[] = [
   {
@@ -106,6 +107,8 @@ const App: React.FC = () => {
   const [isTimerOpen, setIsTimerOpen] = useState(false);
   const [isLifeAspectsOpen, setIsLifeAspectsOpen] = useState(false);
   const { user, loading } = useAuth();
+  const [lastGoalsPersistAt, setLastGoalsPersistAt] = useState<number | null>(null);
+  const [lastSchedulePersistAt, setLastSchedulePersistAt] = useState<number | null>(null);
 
   const handleLogout = async () => {
     if (!isSupabaseConfigured || !supabase) return;
@@ -144,11 +147,13 @@ const App: React.FC = () => {
   useEffect(() => {
     if (!user) return;
     persistScheduleTasksToStorage(user.id, scheduleTasks);
+    setLastSchedulePersistAt(Date.now());
   }, [scheduleTasks, user]);
 
   useEffect(() => {
     if (!user) return;
     persistGoalsToStorage(user.id, goals);
+    setLastGoalsPersistAt(Date.now());
   }, [goals, user]);
 
   const handleStartTimer = (habit: Habit) => {
@@ -157,7 +162,7 @@ const App: React.FC = () => {
   };
 
   const handleTimerComplete = (habitId: string) => {
-    const today = new Date().toISOString().split('T')[0];
+    const today = format(new Date(), 'yyyy-MM-dd');
 
     const goal = goals.find(g => g.habits.some(h => h.id === habitId));
     if (goal) {
@@ -203,7 +208,7 @@ const App: React.FC = () => {
   };
 
   const handleToggleHabitCompletion = (habitId: string) => {
-    const today = new Date().toISOString().split('T')[0];
+    const today = format(new Date(), 'yyyy-MM-dd');
 
     const goal = goals.find(g => g.habits.some(h => h.id === habitId));
     if (goal) {
@@ -375,7 +380,7 @@ const App: React.FC = () => {
   }, [goals, filterAspect]);
 
   const activeHabitsCount = useMemo(() => {
-    const today = new Date().toISOString().split('T')[0];
+    const today = format(new Date(), 'yyyy-MM-dd');
     return goals.reduce((acc, goal) => {
       return acc + goal.habits.filter(h => h.completedDates.includes(today)).length;
     }, 0);
@@ -531,15 +536,27 @@ const App: React.FC = () => {
         )}
 
         {view === 'schedule' && (
-          <DailySchedule
-            goals={goals}
-            scheduleTasks={scheduleTasks}
-            onToggleHabit={handleToggleHabitCompletion}
-            onUpdateHabitSchedule={handleUpdateHabitSchedule}
-            onCreateHabit={handleCreateHabitFromSchedule}
-            onDeleteHabit={handleDeleteHabitFromSchedule}
-            onStartTimer={handleStartTimer}
-          />
+          <div className="space-y-4">
+            <div className="bg-white border border-slate-200 rounded-2xl px-4 py-3 text-xs text-slate-600 flex flex-wrap items-center gap-x-4 gap-y-2">
+              <span className="font-semibold text-slate-700">Debug</span>
+              <span>Logged in: {user ? 'yes' : 'no'}</span>
+              <span>User ID: {user?.id ?? 'none'}</span>
+              <span>Supabase: {isSupabaseConfigured ? 'configured' : 'not configured'}</span>
+              <span>Goals: {goals.length}</span>
+              <span>Schedule tasks: {scheduleTasks.length}</span>
+              <span>Last goals save: {lastGoalsPersistAt ? new Date(lastGoalsPersistAt).toLocaleTimeString() : 'none'}</span>
+              <span>Last schedule save: {lastSchedulePersistAt ? new Date(lastSchedulePersistAt).toLocaleTimeString() : 'none'}</span>
+            </div>
+            <DailySchedule
+              goals={goals}
+              scheduleTasks={scheduleTasks}
+              onToggleHabit={handleToggleHabitCompletion}
+              onUpdateHabitSchedule={handleUpdateHabitSchedule}
+              onCreateHabit={handleCreateHabitFromSchedule}
+              onDeleteHabit={handleDeleteHabitFromSchedule}
+              onStartTimer={handleStartTimer}
+            />
+          </div>
         )}
 
         {view === 'goals' && (
