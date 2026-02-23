@@ -49,7 +49,30 @@ const MOCK_GOALS: Goal[] = [
   }
 ];
 
+const goalsStorageKey = 'life-goal:goals';
 const scheduleStorageKey = 'life-goal:schedule-tasks';
+
+const loadGoalsFromStorage = (): Goal[] => {
+  if (typeof window === 'undefined') return [];
+  const raw = window.localStorage.getItem(goalsStorageKey);
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? (parsed as Goal[]) : [];
+  } catch (error) {
+    console.error('Failed to parse goals from localStorage', error);
+    return [];
+  }
+};
+
+const persistGoalsToStorage = (nextGoals: Goal[]) => {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(goalsStorageKey, JSON.stringify(nextGoals));
+  } catch (error) {
+    console.error('Failed to persist goals to localStorage', error);
+  }
+};
 
 const loadScheduleTasksFromStorage = (): Habit[] => {
   if (typeof window === 'undefined') return [];
@@ -95,9 +118,10 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const loadData = async () => {
+      const localGoals = loadGoalsFromStorage();
       const localScheduleTasks = loadScheduleTasksFromStorage();
       if (!user) {
-        setGoals([]);
+        setGoals(localGoals);
         setScheduleTasks(localScheduleTasks);
         return;
       }
@@ -107,7 +131,7 @@ const App: React.FC = () => {
           fetchUserGoals(user),
           fetchUserScheduleTasks(user),
         ]);
-        setGoals(remoteGoals);
+        setGoals(remoteGoals.length > 0 ? remoteGoals : localGoals);
         setScheduleTasks(remoteTasks.length > 0 ? remoteTasks : localScheduleTasks);
       } catch (error) {
         console.error('Failed to load data from Supabase', error);
@@ -120,6 +144,10 @@ const App: React.FC = () => {
   useEffect(() => {
     persistScheduleTasksToStorage(scheduleTasks);
   }, [scheduleTasks]);
+
+  useEffect(() => {
+    persistGoalsToStorage(goals);
+  }, [goals]);
 
   const handleStartTimer = (habit: Habit) => {
     setActiveHabit(habit);
