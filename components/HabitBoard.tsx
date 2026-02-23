@@ -44,8 +44,14 @@ export const HabitBoard: React.FC<HabitBoardProps> = ({
     return Array.from({ length: 7 }).map((_, i) => addDays(start, i));
   }, [selectedDate]);
 
-  const goodHabits = habits.filter(habit => habit.type === 'good');
-  const badHabits = habits.filter(habit => habit.type === 'bad');
+  const isWithinRange = (dateStr: string, startDate?: string, endDate?: string) => {
+    if (startDate && dateStr < startDate) return false;
+    if (endDate && dateStr > endDate) return false;
+    return true;
+  };
+
+  const goodHabits = habits.filter(habit => habit.type === 'good' && isWithinRange(selectedDateStr, habit.startDate, habit.endDate));
+  const badHabits = habits.filter(habit => habit.type === 'bad' && isWithinRange(selectedDateStr, habit.startDate, habit.endDate));
 
   const handleAddGood = () => {
     const title = goodInput.trim();
