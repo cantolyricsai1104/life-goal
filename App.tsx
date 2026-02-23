@@ -790,6 +790,12 @@ const App: React.FC = () => {
             onAddHabit={handleAddHabitItem}
             onToggleHabit={handleToggleHabitItem}
             onRemoveHabit={handleRemoveHabitItem}
+            onUpdateHabitDates={(habitId, startDate, endDate) => {
+              const updatedItems = habitItems.map(item =>
+                item.id === habitId ? { ...item, startDate, endDate } : item
+              );
+              applySnapshot({ goals, scheduleTasks, habitItems: updatedItems }, true);
+            }}
           />
         )}
 

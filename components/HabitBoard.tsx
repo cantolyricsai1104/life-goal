@@ -20,6 +20,7 @@ interface HabitBoardProps {
   onAddHabit: (type: HabitType, title: string, startDate?: string, endDate?: string) => void;
   onToggleHabit: (habitId: string, dateStr: string) => void;
   onRemoveHabit: (habitId: string) => void;
+  onUpdateHabitDates: (habitId: string, startDate?: string, endDate?: string) => void;
 }
 
 export const HabitBoard: React.FC<HabitBoardProps> = ({
@@ -29,6 +30,7 @@ export const HabitBoard: React.FC<HabitBoardProps> = ({
   onAddHabit,
   onToggleHabit,
   onRemoveHabit,
+  onUpdateHabitDates,
 }) => {
   const [goodInput, setGoodInput] = useState('');
   const [badInput, setBadInput] = useState('');
@@ -38,6 +40,13 @@ export const HabitBoard: React.FC<HabitBoardProps> = ({
   const [badStart, setBadStart] = useState(todayStr);
   const [badEnd, setBadEnd] = useState(todayStr);
   const selectedDateStr = format(selectedDate, 'yyyy-MM-dd');
+  const [contextMenu, setContextMenu] = useState<{
+    habitId: string;
+    x: number;
+    y: number;
+    startDate?: string;
+    endDate?: string;
+  } | null>(null);
 
   const weekDays = useMemo(() => {
     const start = startOfWeek(selectedDate, { weekStartsOn: 0 });
@@ -74,6 +83,16 @@ export const HabitBoard: React.FC<HabitBoardProps> = ({
     return (
       <div
         key={habit.id}
+        onContextMenu={(event) => {
+          event.preventDefault();
+          setContextMenu({
+            habitId: habit.id,
+            x: event.clientX,
+            y: event.clientY,
+            startDate: habit.startDate ?? selectedDateStr,
+            endDate: habit.endDate ?? selectedDateStr,
+          });
+        }}
         className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2"
       >
         <button
@@ -272,6 +291,47 @@ export const HabitBoard: React.FC<HabitBoardProps> = ({
           </div>
         </div>
       </div>
+      {contextMenu && (
+        <div
+          className="fixed inset-0 z-40"
+          onClick={() => setContextMenu(null)}
+        >
+          <div
+            className="absolute bg-white rounded-xl shadow-lg border border-slate-200 p-3 w-56 space-y-3"
+            style={{ top: contextMenu.y, left: contextMenu.x }}
+            onClick={event => event.stopPropagation()}
+          >
+            <div className="grid grid-cols-2 gap-2">
+              <input
+                type="date"
+                value={contextMenu.startDate ?? ''}
+                onChange={(event) =>
+                  setContextMenu(prev => (prev ? { ...prev, startDate: event.target.value } : prev))
+                }
+                className="w-full border border-slate-200 rounded-md px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-violet-500"
+              />
+              <input
+                type="date"
+                value={contextMenu.endDate ?? ''}
+                onChange={(event) =>
+                  setContextMenu(prev => (prev ? { ...prev, endDate: event.target.value } : prev))
+                }
+                className="w-full border border-slate-200 rounded-md px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-violet-500"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                onUpdateHabitDates(contextMenu.habitId, contextMenu.startDate, contextMenu.endDate);
+                setContextMenu(null);
+              }}
+              className="w-full text-sm font-medium px-3 py-1.5 rounded-md bg-violet-600 text-white hover:bg-violet-700"
+            >
+              Update dates
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
