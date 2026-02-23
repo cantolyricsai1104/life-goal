@@ -5,6 +5,7 @@ import { GoalCard } from './components/GoalCard';
 import { GoalWizard } from './components/GoalWizard';
 import { FullScreenTimer } from './components/FullScreenTimer';
 import { DailySchedule } from './components/DailySchedule';
+import { HabitBoard, HabitItem } from './components/HabitBoard';
 import { LandingPage } from './components/LandingPage';
 import { useAuth } from './contexts/AuthContext';
 import { saveRecord } from './services/recordsService';
@@ -52,6 +53,7 @@ const MOCK_GOALS: Goal[] = [
 
 const goalsStorageKey = (userId: string) => `life-goal:goals:${userId}`;
 const scheduleStorageKey = (userId: string) => `life-goal:schedule-tasks:${userId}`;
+const habitsStorageKey = (userId: string) => `life-goal:habits:${userId}`;
 
 const loadGoalsFromStorage = (userId: string | null | undefined): Goal[] => {
   if (typeof window === 'undefined' || !userId) return [];
@@ -114,12 +116,36 @@ const persistScheduleTasksToStorage = (
   }
 };
 
+const loadHabitItemsFromStorage = (userId: string | null | undefined): HabitItem[] => {
+  if (typeof window === 'undefined' || !userId) return [];
+  const raw = window.localStorage.getItem(habitsStorageKey(userId));
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? (parsed as HabitItem[]) : [];
+  } catch (error) {
+    console.error('Failed to parse habit items from localStorage', error);
+    return [];
+  }
+};
+
+const persistHabitItemsToStorage = (userId: string | null | undefined, items: HabitItem[]) => {
+  if (typeof window === 'undefined' || !userId) return;
+  try {
+    window.localStorage.setItem(habitsStorageKey(userId), JSON.stringify(items));
+  } catch (error) {
+    console.error('Failed to persist habit items to localStorage', error);
+  }
+};
+
 const App: React.FC = () => {
   const [goals, setGoals] = useState<Goal[]>([]);
   const [scheduleTasks, setScheduleTasks] = useState<Habit[]>([]);
   const [isWizardOpen, setIsWizardOpen] = useState(false);
   const [filterAspect, setFilterAspect] = useState<LifeAspect | 'All'>('All');
-  const [view, setView] = useState<'goals' | 'schedule'>('goals');
+  const [view, setView] = useState<'goals' | 'schedule' | 'habits'>('goals');
+  const [habitItems, setHabitItems] = useState<HabitItem[]>([]);
+  const [habitDate, setHabitDate] = useState(new Date());
   const [activeHabit, setActiveHabit] = useState<Habit | null>(null);
   const [isTimerOpen, setIsTimerOpen] = useState(false);
   const [isLifeAspectsOpen, setIsLifeAspectsOpen] = useState(false);
@@ -150,7 +176,9 @@ const App: React.FC = () => {
 
       const localGoals = loadGoalsFromStorage(user.id);
       const localScheduleSnapshot = loadScheduleTasksFromStorage(user.id);
+      const localHabitItems = loadHabitItemsFromStorage(user.id);
       setLocalScheduleUpdatedAt(localScheduleSnapshot.updatedAt);
+      setHabitItems(localHabitItems);
       try {
         const [remoteGoals, remoteTasks] = await Promise.all([
           fetchUserGoals(user),
@@ -188,6 +216,11 @@ const App: React.FC = () => {
     persistGoalsToStorage(user.id, goals);
     setLastGoalsPersistAt(Date.now());
   }, [goals, user, dataHydrated]);
+
+  useEffect(() => {
+    if (!user || !dataHydrated) return;
+    persistHabitItemsToStorage(user.id, habitItems);
+  }, [habitItems, user, dataHydrated]);
 
   const handleStartTimer = (habit: Habit) => {
     setActiveHabit(habit);
@@ -357,6 +390,33 @@ const App: React.FC = () => {
     }
   };
 
+  const handleAddHabitItem = (type: 'good' | 'bad', title: string) => {
+    const next: HabitItem = {
+      id: uuidv4(),
+      title,
+      type,
+      completedDates: [],
+    };
+    setHabitItems(prev => [next, ...prev]);
+  };
+
+  const handleToggleHabitItem = (habitId: string, dateStr: string) => {
+    setHabitItems(prev =>
+      prev.map(item => {
+        if (item.id !== habitId) return item;
+        const isCompleted = item.completedDates.includes(dateStr);
+        const completedDates = isCompleted
+          ? item.completedDates.filter(date => date !== dateStr)
+          : [...item.completedDates, dateStr];
+        return { ...item, completedDates };
+      })
+    );
+  };
+
+  const handleRemoveHabitItem = (habitId: string) => {
+    setHabitItems(prev => prev.filter(item => item.id !== habitId));
+  };
+
   const handleAddGoal = async (goal: Goal) => {
     setGoals(prev => [goal, ...prev]);
 
@@ -498,6 +558,15 @@ const App: React.FC = () => {
               >
                 Schedule
               </button>
+              <button
+                onClick={() => {
+                  setView('habits');
+                  setIsLifeAspectsOpen(false);
+                }}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'habits' ? 'bg-white text-violet-700 shadow-sm' : 'text-slate-600 hover:text-slate-800'}`}
+              >
+                Habits
+              </button>
             </div>
           </div>
 
@@ -539,6 +608,12 @@ const App: React.FC = () => {
             className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'schedule' ? 'bg-violet-50 text-violet-700' : 'text-slate-500'}`}
           >
             Schedule
+          </button>
+          <button
+            onClick={() => setView('habits')}
+            className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'habits' ? 'bg-violet-50 text-violet-700' : 'text-slate-500'}`}
+          >
+            Habits
           </button>
         </div>
 
@@ -592,6 +667,17 @@ const App: React.FC = () => {
               onStartTimer={handleStartTimer}
             />
           </div>
+        )}
+
+        {view === 'habits' && (
+          <HabitBoard
+            habits={habitItems}
+            selectedDate={habitDate}
+            onChangeDate={setHabitDate}
+            onAddHabit={handleAddHabitItem}
+            onToggleHabit={handleToggleHabitItem}
+            onRemoveHabit={handleRemoveHabitItem}
+          />
         )}
 
         {view === 'goals' && (

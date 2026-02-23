@@ -1,0 +1,224 @@
+import React, { useMemo, useState } from 'react';
+import { addDays, format, isSameDay, startOfWeek } from 'date-fns';
+import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Check } from './Icons';
+
+export type HabitType = 'good' | 'bad';
+
+export type HabitItem = {
+  id: string;
+  title: string;
+  type: HabitType;
+  completedDates: string[];
+};
+
+interface HabitBoardProps {
+  habits: HabitItem[];
+  selectedDate: Date;
+  onChangeDate: (next: Date) => void;
+  onAddHabit: (type: HabitType, title: string) => void;
+  onToggleHabit: (habitId: string, dateStr: string) => void;
+  onRemoveHabit: (habitId: string) => void;
+}
+
+export const HabitBoard: React.FC<HabitBoardProps> = ({
+  habits,
+  selectedDate,
+  onChangeDate,
+  onAddHabit,
+  onToggleHabit,
+  onRemoveHabit,
+}) => {
+  const [goodInput, setGoodInput] = useState('');
+  const [badInput, setBadInput] = useState('');
+  const selectedDateStr = format(selectedDate, 'yyyy-MM-dd');
+
+  const weekDays = useMemo(() => {
+    const start = startOfWeek(selectedDate, { weekStartsOn: 0 });
+    return Array.from({ length: 7 }).map((_, i) => addDays(start, i));
+  }, [selectedDate]);
+
+  const goodHabits = habits.filter(habit => habit.type === 'good');
+  const badHabits = habits.filter(habit => habit.type === 'bad');
+
+  const handleAddGood = () => {
+    const title = goodInput.trim();
+    if (!title) return;
+    onAddHabit('good', title);
+    setGoodInput('');
+  };
+
+  const handleAddBad = () => {
+    const title = badInput.trim();
+    if (!title) return;
+    onAddHabit('bad', title);
+    setBadInput('');
+  };
+
+  const renderHabitItem = (habit: HabitItem) => {
+    const isCompleted = habit.completedDates.includes(selectedDateStr);
+    return (
+      <div
+        key={habit.id}
+        className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2"
+      >
+        <button
+          type="button"
+          onClick={() => onToggleHabit(habit.id, selectedDateStr)}
+          className={`w-5 h-5 rounded border flex items-center justify-center ${
+            isCompleted ? 'bg-emerald-500 border-emerald-500 text-white' : 'border-slate-300 text-transparent'
+          }`}
+        >
+          <Check className="w-3.5 h-3.5" />
+        </button>
+        <div className={`flex-1 text-sm ${isCompleted ? 'line-through text-slate-400' : 'text-slate-700'}`}>
+          {habit.title}
+        </div>
+        {isCompleted && (
+          <button
+            type="button"
+            onClick={() => onRemoveHabit(habit.id)}
+            className="text-xs font-medium text-slate-500 hover:text-slate-700"
+          >
+            Remove
+          </button>
+        )}
+      </div>
+    );
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-white">
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => onChangeDate(addDays(selectedDate, -7))}
+              className="p-1 hover:bg-slate-100 rounded-full"
+            >
+              <ChevronLeft className="w-5 h-5 text-slate-500" />
+            </button>
+            <h2 className="text-lg font-bold text-slate-800">{format(selectedDate, 'MMMM yyyy')}</h2>
+            <button
+              type="button"
+              onClick={() => onChangeDate(addDays(selectedDate, 7))}
+              className="p-1 hover:bg-slate-100 rounded-full"
+            >
+              <ChevronRight className="w-5 h-5 text-slate-500" />
+            </button>
+          </div>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => onChangeDate(new Date())}
+              className="text-xs font-medium px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-full transition-colors"
+            >
+              Today
+            </button>
+            <button type="button" className="p-2 hover:bg-slate-100 rounded-full">
+              <CalendarIcon className="w-5 h-5 text-slate-500" />
+            </button>
+          </div>
+        </div>
+        <div className="grid grid-cols-7 border-b border-slate-100 bg-slate-50/50">
+          {weekDays.map((date) => {
+            const isSelected = isSameDay(date, selectedDate);
+            const isToday = isSameDay(date, new Date());
+            return (
+              <div
+                key={date.toISOString()}
+                onClick={() => onChangeDate(date)}
+                className={`flex flex-col items-center justify-center py-3 cursor-pointer transition-colors ${
+                  isSelected ? 'bg-white shadow-sm' : 'hover:bg-slate-50'
+                }`}
+              >
+                <span className={`text-xs font-medium mb-1 ${isToday ? 'text-violet-600' : 'text-slate-400'}`}>
+                  {format(date, 'EEE')}
+                </span>
+                <div
+                  className={`w-8 h-8 flex items-center justify-center rounded-full text-sm font-bold ${
+                    isSelected
+                      ? 'bg-slate-900 text-white'
+                      : isToday
+                      ? 'text-violet-600 bg-violet-50'
+                      : 'text-slate-700'
+                  }`}
+                >
+                  {format(date, 'd')}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="grid gap-6 md:grid-cols-2">
+        <div className="bg-white rounded-2xl border border-emerald-200 shadow-sm p-5 space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-emerald-700">Good Habits</h3>
+            <span className="text-xs text-emerald-600 bg-emerald-50 px-2 py-1 rounded-full">
+              {goodHabits.length}
+            </span>
+          </div>
+          <div className="flex gap-2">
+            <input
+              value={goodInput}
+              onChange={(event) => setGoodInput(event.target.value)}
+              placeholder="Add a good habit"
+              className="flex-1 px-3 py-2 rounded-xl border border-emerald-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200"
+            />
+            <button
+              type="button"
+              onClick={handleAddGood}
+              className="px-4 py-2 rounded-xl bg-emerald-500 text-white text-sm font-semibold hover:bg-emerald-600"
+            >
+              Add
+            </button>
+          </div>
+          <div className="space-y-2">
+            {goodHabits.length === 0 ? (
+              <div className="text-xs text-emerald-600 bg-emerald-50 rounded-xl px-3 py-2">
+                No good habits yet.
+              </div>
+            ) : (
+              goodHabits.map(renderHabitItem)
+            )}
+          </div>
+        </div>
+
+        <div className="bg-white rounded-2xl border border-rose-200 shadow-sm p-5 space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-rose-700">Bad Habits</h3>
+            <span className="text-xs text-rose-600 bg-rose-50 px-2 py-1 rounded-full">
+              {badHabits.length}
+            </span>
+          </div>
+          <div className="flex gap-2">
+            <input
+              value={badInput}
+              onChange={(event) => setBadInput(event.target.value)}
+              placeholder="Add a bad habit"
+              className="flex-1 px-3 py-2 rounded-xl border border-rose-200 text-sm focus:outline-none focus:ring-2 focus:ring-rose-200"
+            />
+            <button
+              type="button"
+              onClick={handleAddBad}
+              className="px-4 py-2 rounded-xl bg-rose-500 text-white text-sm font-semibold hover:bg-rose-600"
+            >
+              Add
+            </button>
+          </div>
+          <div className="space-y-2">
+            {badHabits.length === 0 ? (
+              <div className="text-xs text-rose-600 bg-rose-50 rounded-xl px-3 py-2">
+                No bad habits yet.
+              </div>
+            ) : (
+              badHabits.map(renderHabitItem)
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
