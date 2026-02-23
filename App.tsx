@@ -49,6 +49,30 @@ const MOCK_GOALS: Goal[] = [
   }
 ];
 
+const scheduleStorageKey = 'life-goal:schedule-tasks';
+
+const loadScheduleTasksFromStorage = (): Habit[] => {
+  if (typeof window === 'undefined') return [];
+  const raw = window.localStorage.getItem(scheduleStorageKey);
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? (parsed as Habit[]) : [];
+  } catch (error) {
+    console.error('Failed to parse schedule tasks from localStorage', error);
+    return [];
+  }
+};
+
+const persistScheduleTasksToStorage = (tasks: Habit[]) => {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(scheduleStorageKey, JSON.stringify(tasks));
+  } catch (error) {
+    console.error('Failed to persist schedule tasks to localStorage', error);
+  }
+};
+
 const App: React.FC = () => {
   const [goals, setGoals] = useState<Goal[]>([]);
   const [scheduleTasks, setScheduleTasks] = useState<Habit[]>([]);
@@ -71,9 +95,10 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const loadData = async () => {
+      const localScheduleTasks = loadScheduleTasksFromStorage();
       if (!user) {
         setGoals([]);
-        setScheduleTasks([]);
+        setScheduleTasks(localScheduleTasks);
         return;
       }
 
@@ -83,7 +108,7 @@ const App: React.FC = () => {
           fetchUserScheduleTasks(user),
         ]);
         setGoals(remoteGoals);
-        setScheduleTasks(remoteTasks);
+        setScheduleTasks(remoteTasks.length > 0 ? remoteTasks : localScheduleTasks);
       } catch (error) {
         console.error('Failed to load data from Supabase', error);
       }
@@ -91,6 +116,10 @@ const App: React.FC = () => {
 
     void loadData();
   }, [user]);
+
+  useEffect(() => {
+    persistScheduleTasksToStorage(scheduleTasks);
+  }, [scheduleTasks]);
 
   const handleStartTimer = (habit: Habit) => {
     setActiveHabit(habit);
