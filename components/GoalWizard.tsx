@@ -13,37 +13,6 @@ export const GoalWizard: React.FC<GoalWizardProps> = ({ onAddGoal, onClose }) =>
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [plan, setPlan] = useState<AIPlanResponse | null>(null);
-  const [history, setHistory] = useState(['']);
-  const [historyIndex, setHistoryIndex] = useState(0);
-
-  const applyInputChange = (value: string) => {
-    setInput(value);
-    setHistoryIndex(prevIndex => {
-      const nextIndex = prevIndex + 1;
-      setHistory(prev => {
-        const next = prev.slice(0, nextIndex);
-        next.push(value);
-        return next;
-      });
-      return nextIndex;
-    });
-  };
-
-  const handleUndo = () => {
-    setHistoryIndex(prev => {
-      const nextIndex = Math.max(0, prev - 1);
-      setInput(history[nextIndex] ?? '');
-      return nextIndex;
-    });
-  };
-
-  const handleRedo = () => {
-    setHistoryIndex(prev => {
-      const nextIndex = Math.min(history.length - 1, prev + 1);
-      setInput(history[nextIndex] ?? '');
-      return nextIndex;
-    });
-  };
 
   const handleGenerate = async () => {
     if (!input.trim()) return;
@@ -104,28 +73,10 @@ export const GoalWizard: React.FC<GoalWizardProps> = ({ onAddGoal, onClose }) =>
               <label className="block text-sm font-medium text-slate-700">What do you want to achieve?</label>
               <textarea
                 value={input}
-                onChange={(e) => applyInputChange(e.target.value)}
+                onChange={(e) => setInput(e.target.value)}
                 placeholder="e.g., I want to run a marathon, or I want to learn Spanish..."
                 className="w-full p-4 rounded-xl border border-slate-200 focus:ring-2 focus:ring-violet-500 focus:border-transparent outline-none resize-none h-32"
               />
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={handleUndo}
-                  disabled={historyIndex === 0}
-                  className="px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-medium text-slate-600 hover:text-slate-900 disabled:text-slate-300"
-                >
-                  Undo
-                </button>
-                <button
-                  type="button"
-                  onClick={handleRedo}
-                  disabled={historyIndex >= history.length - 1}
-                  className="px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-medium text-slate-600 hover:text-slate-900 disabled:text-slate-300"
-                >
-                  Redo
-                </button>
-              </div>
               <button
                 onClick={handleGenerate}
                 disabled={loading || !input.trim()}

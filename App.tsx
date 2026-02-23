@@ -55,6 +55,12 @@ const goalsStorageKey = (userId: string) => `life-goal:goals:${userId}`;
 const scheduleStorageKey = (userId: string) => `life-goal:schedule-tasks:${userId}`;
 const habitsStorageKey = (userId: string) => `life-goal:habits:${userId}`;
 
+type AppSnapshot = {
+  goals: Goal[];
+  scheduleTasks: Habit[];
+  habitItems: HabitItem[];
+};
+
 const loadGoalsFromStorage = (userId: string | null | undefined): Goal[] => {
   if (typeof window === 'undefined' || !userId) return [];
   const raw = window.localStorage.getItem(goalsStorageKey(userId));
@@ -155,6 +161,8 @@ const App: React.FC = () => {
   const [localScheduleUpdatedAt, setLocalScheduleUpdatedAt] = useState<number | null>(null);
   const [remoteScheduleUpdatedAt, setRemoteScheduleUpdatedAt] = useState<number | null>(null);
   const [dataHydrated, setDataHydrated] = useState(false);
+  const [history, setHistory] = useState<AppSnapshot[]>([]);
+  const [historyIndex, setHistoryIndex] = useState(-1);
 
   const handleLogout = async () => {
     if (!isSupabaseConfigured || !supabase) return;
@@ -171,6 +179,9 @@ const App: React.FC = () => {
       if (!user) {
         setGoals([]);
         setScheduleTasks([]);
+        setHabitItems([]);
+        setHistory([]);
+        setHistoryIndex(-1);
         return;
       }
 
@@ -178,13 +189,12 @@ const App: React.FC = () => {
       const localScheduleSnapshot = loadScheduleTasksFromStorage(user.id);
       const localHabitItems = loadHabitItemsFromStorage(user.id);
       setLocalScheduleUpdatedAt(localScheduleSnapshot.updatedAt);
-      setHabitItems(localHabitItems);
       try {
         const [remoteGoals, remoteTasks] = await Promise.all([
           fetchUserGoals(user),
           fetchUserScheduleTasks(user),
         ]);
-        setGoals(remoteGoals.length > 0 ? remoteGoals : localGoals);
+        const resolvedGoals = remoteGoals.length > 0 ? remoteGoals : localGoals;
         setRemoteScheduleUpdatedAt(remoteTasks.latestUpdatedAt);
         const shouldPreferLocal =
           localScheduleSnapshot.tasks.length > 0 &&
@@ -192,7 +202,17 @@ const App: React.FC = () => {
             (localScheduleSnapshot.updatedAt !== null &&
               (!remoteTasks.latestUpdatedAt ||
                 localScheduleSnapshot.updatedAt >= remoteTasks.latestUpdatedAt)));
-        setScheduleTasks(shouldPreferLocal ? localScheduleSnapshot.tasks : remoteTasks.tasks);
+        const resolvedScheduleTasks = shouldPreferLocal ? localScheduleSnapshot.tasks : remoteTasks.tasks;
+        const snapshot: AppSnapshot = {
+          goals: resolvedGoals,
+          scheduleTasks: resolvedScheduleTasks,
+          habitItems: localHabitItems,
+        };
+        setGoals(resolvedGoals);
+        setScheduleTasks(resolvedScheduleTasks);
+        setHabitItems(localHabitItems);
+        setHistory([snapshot]);
+        setHistoryIndex(0);
       } catch (error) {
         console.error('Failed to load data from Supabase', error);
       } finally {
@@ -222,6 +242,75 @@ const App: React.FC = () => {
     persistHabitItemsToStorage(user.id, habitItems);
   }, [habitItems, user, dataHydrated]);
 
+  const recordSnapshot = (snapshot: AppSnapshot) => {
+    if (!dataHydrated) return;
+    setHistoryIndex(prevIndex => {
+      const nextIndex = prevIndex + 1;
+      setHistory(prev => {
+        const trimmed = prev.slice(0, nextIndex);
+        trimmed.push(snapshot);
+        return trimmed;
+      });
+      return nextIndex;
+    });
+  };
+
+  const applySnapshot = (snapshot: AppSnapshot, record: boolean) => {
+    setGoals(snapshot.goals);
+    setScheduleTasks(snapshot.scheduleTasks);
+    setHabitItems(snapshot.habitItems);
+    if (record) {
+      recordSnapshot(snapshot);
+    }
+  };
+
+  const syncSnapshotToRemote = (next: AppSnapshot, previous: AppSnapshot) => {
+    if (!user) return;
+    const nextGoalIds = new Set(next.goals.map(goal => goal.id));
+    const prevGoalIds = new Set(previous.goals.map(goal => goal.id));
+    const goalsToDelete = previous.goals.filter(goal => !nextGoalIds.has(goal.id));
+    const goalsToUpsert = next.goals;
+    const nextTaskIds = new Set(next.scheduleTasks.map(task => task.id));
+    const prevTaskIds = new Set(previous.scheduleTasks.map(task => task.id));
+    const tasksToDelete = previous.scheduleTasks.filter(task => !nextTaskIds.has(task.id));
+    const tasksToUpsert = next.scheduleTasks;
+    void Promise.all([
+      ...goalsToUpsert.map(goal => upsertUserGoal(user, goal)),
+      ...goalsToDelete.map(goal => deleteUserGoal(user, goal.id)),
+      ...tasksToUpsert.map(task => upsertUserScheduleTask(user, task)),
+      ...tasksToDelete.map(task => deleteUserScheduleTask(user, task.id)),
+    ]).catch((error) => {
+      console.error('Failed to sync undo/redo snapshot to Supabase', error);
+    });
+  };
+
+  const canUndo = historyIndex > 0;
+  const canRedo = historyIndex >= 0 && historyIndex < history.length - 1;
+
+  const handleUndo = () => {
+    if (!canUndo) return;
+    const prevSnapshot = history[historyIndex - 1];
+    if (!prevSnapshot) return;
+    const currentSnapshot = history[historyIndex];
+    setHistoryIndex(historyIndex - 1);
+    applySnapshot(prevSnapshot, false);
+    if (currentSnapshot) {
+      syncSnapshotToRemote(prevSnapshot, currentSnapshot);
+    }
+  };
+
+  const handleRedo = () => {
+    if (!canRedo) return;
+    const nextSnapshot = history[historyIndex + 1];
+    if (!nextSnapshot) return;
+    const currentSnapshot = history[historyIndex];
+    setHistoryIndex(historyIndex + 1);
+    applySnapshot(nextSnapshot, false);
+    if (currentSnapshot) {
+      syncSnapshotToRemote(nextSnapshot, currentSnapshot);
+    }
+  };
+
   const handleStartTimer = (habit: Habit) => {
     setActiveHabit(habit);
     setIsTimerOpen(true);
@@ -248,20 +337,16 @@ const App: React.FC = () => {
       return;
     }
 
-    let updatedTasks: Habit[] = [];
-    setScheduleTasks(prev => {
-      updatedTasks = prev.map(habit => {
-        if (habit.id !== habitId) return habit;
-        if (habit.completedDates.includes(today)) return habit;
-
-        return {
-          ...habit,
-          completedDates: [...habit.completedDates, today],
-          streak: habit.streak + 1,
-        };
-      });
-      return updatedTasks;
+    const updatedTasks = scheduleTasks.map(habit => {
+      if (habit.id !== habitId) return habit;
+      if (habit.completedDates.includes(today)) return habit;
+      return {
+        ...habit,
+        completedDates: [...habit.completedDates, today],
+        streak: habit.streak + 1,
+      };
     });
+    applySnapshot({ goals, scheduleTasks: updatedTasks, habitItems }, true);
 
     if (user) {
       const updatedTask = updatedTasks.find(h => h.id === habitId);
@@ -297,19 +382,16 @@ const App: React.FC = () => {
       return;
     }
 
-    let updatedTasks: Habit[] = [];
-    setScheduleTasks(prev => {
-      updatedTasks = prev.map(habit => {
-        if (habit.id !== habitId) return habit;
-        const isCompleted = habit.completedDates.includes(today);
-        const completedDates = isCompleted
-          ? habit.completedDates.filter(date => date !== today)
-          : [...habit.completedDates, today];
-        const streak = isCompleted ? Math.max(0, habit.streak - 1) : habit.streak + 1;
-        return { ...habit, completedDates, streak };
-      });
-      return updatedTasks;
+    const updatedTasks = scheduleTasks.map(habit => {
+      if (habit.id !== habitId) return habit;
+      const isCompleted = habit.completedDates.includes(today);
+      const completedDates = isCompleted
+        ? habit.completedDates.filter(date => date !== today)
+        : [...habit.completedDates, today];
+      const streak = isCompleted ? Math.max(0, habit.streak - 1) : habit.streak + 1;
+      return { ...habit, completedDates, streak };
     });
+    applySnapshot({ goals, scheduleTasks: updatedTasks, habitItems }, true);
 
     if (user) {
       const updatedTask = updatedTasks.find(h => h.id === habitId);
@@ -333,11 +415,8 @@ const App: React.FC = () => {
       return;
     }
 
-    let updatedTasks: Habit[] = [];
-    setScheduleTasks(prev => {
-      updatedTasks = prev.map(h => (h.id === habitId ? { ...h, ...updates } : h));
-      return updatedTasks;
-    });
+    const updatedTasks = scheduleTasks.map(h => (h.id === habitId ? { ...h, ...updates } : h));
+    applySnapshot({ goals, scheduleTasks: updatedTasks, habitItems }, true);
 
     if (user) {
       const updatedTask = updatedTasks.find(h => h.id === habitId);
@@ -368,7 +447,8 @@ const App: React.FC = () => {
       endDate,
     };
 
-    setScheduleTasks(prev => [...prev, newHabit]);
+    const updatedTasks = [...scheduleTasks, newHabit];
+    applySnapshot({ goals, scheduleTasks: updatedTasks, habitItems }, true);
 
     if (user) {
       void upsertUserScheduleTask(user, newHabit).catch((error) => {
@@ -389,7 +469,8 @@ const App: React.FC = () => {
       return;
     }
 
-    setScheduleTasks(prev => prev.filter(habit => habit.id !== habitId));
+    const updatedTasks = scheduleTasks.filter(habit => habit.id !== habitId);
+    applySnapshot({ goals, scheduleTasks: updatedTasks, habitItems }, true);
 
     if (user) {
       void deleteUserScheduleTask(user, habitId).catch((error) => {
@@ -407,28 +488,30 @@ const App: React.FC = () => {
       startDate,
       endDate,
     };
-    setHabitItems(prev => [next, ...prev]);
+    const updatedItems = [next, ...habitItems];
+    applySnapshot({ goals, scheduleTasks, habitItems: updatedItems }, true);
   };
 
   const handleToggleHabitItem = (habitId: string, dateStr: string) => {
-    setHabitItems(prev =>
-      prev.map(item => {
-        if (item.id !== habitId) return item;
-        const isCompleted = item.completedDates.includes(dateStr);
-        const completedDates = isCompleted
-          ? item.completedDates.filter(date => date !== dateStr)
-          : [...item.completedDates, dateStr];
-        return { ...item, completedDates };
-      })
-    );
+    const updatedItems = habitItems.map(item => {
+      if (item.id !== habitId) return item;
+      const isCompleted = item.completedDates.includes(dateStr);
+      const completedDates = isCompleted
+        ? item.completedDates.filter(date => date !== dateStr)
+        : [...item.completedDates, dateStr];
+      return { ...item, completedDates };
+    });
+    applySnapshot({ goals, scheduleTasks, habitItems: updatedItems }, true);
   };
 
   const handleRemoveHabitItem = (habitId: string) => {
-    setHabitItems(prev => prev.filter(item => item.id !== habitId));
+    const updatedItems = habitItems.filter(item => item.id !== habitId);
+    applySnapshot({ goals, scheduleTasks, habitItems: updatedItems }, true);
   };
 
   const handleAddGoal = async (goal: Goal) => {
-    setGoals(prev => [goal, ...prev]);
+    const updatedGoals = [goal, ...goals];
+    applySnapshot({ goals: updatedGoals, scheduleTasks, habitItems }, true);
 
     if (user) {
       try {
@@ -447,7 +530,8 @@ const App: React.FC = () => {
   };
 
   const handleUpdateGoal = (updatedGoal: Goal) => {
-    setGoals(prev => prev.map(g => g.id === updatedGoal.id ? updatedGoal : g));
+    const updatedGoals = goals.map(g => g.id === updatedGoal.id ? updatedGoal : g);
+    applySnapshot({ goals: updatedGoals, scheduleTasks, habitItems }, true);
 
     if (user) {
       void Promise.all([
@@ -465,7 +549,8 @@ const App: React.FC = () => {
   };
 
   const handleDeleteGoal = (id: string) => {
-    setGoals(prev => prev.filter(g => g.id !== id));
+    const updatedGoals = goals.filter(g => g.id !== id);
+    applySnapshot({ goals: updatedGoals, scheduleTasks, habitItems }, true);
 
     if (user) {
       void Promise.all([
@@ -586,6 +671,24 @@ const App: React.FC = () => {
               <span>
                 Today: {activeHabitsCount}/{totalHabits} Habits
               </span>
+            </div>
+            <div className="hidden md:flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleUndo}
+                disabled={!canUndo}
+                className="px-3 py-1.5 rounded-lg text-sm font-medium border border-slate-200 text-slate-600 hover:text-slate-900 disabled:text-slate-300 disabled:border-slate-100"
+              >
+                Undo
+              </button>
+              <button
+                type="button"
+                onClick={handleRedo}
+                disabled={!canRedo}
+                className="px-3 py-1.5 rounded-lg text-sm font-medium border border-slate-200 text-slate-600 hover:text-slate-900 disabled:text-slate-300 disabled:border-slate-100"
+              >
+                Redo
+              </button>
             </div>
             <button
               onClick={() => setIsWizardOpen(true)}
