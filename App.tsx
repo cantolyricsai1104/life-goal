@@ -128,6 +128,7 @@ const App: React.FC = () => {
   const [lastSchedulePersistAt, setLastSchedulePersistAt] = useState<number | null>(null);
   const [localScheduleUpdatedAt, setLocalScheduleUpdatedAt] = useState<number | null>(null);
   const [remoteScheduleUpdatedAt, setRemoteScheduleUpdatedAt] = useState<number | null>(null);
+  const [dataHydrated, setDataHydrated] = useState(false);
 
   const handleLogout = async () => {
     if (!isSupabaseConfigured || !supabase) return;
@@ -140,6 +141,7 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const loadData = async () => {
+      setDataHydrated(false);
       if (!user) {
         setGoals([]);
         setScheduleTasks([]);
@@ -165,6 +167,8 @@ const App: React.FC = () => {
         setScheduleTasks(shouldPreferLocal ? localScheduleSnapshot.tasks : remoteTasks.tasks);
       } catch (error) {
         console.error('Failed to load data from Supabase', error);
+      } finally {
+        setDataHydrated(true);
       }
     };
 
@@ -172,18 +176,18 @@ const App: React.FC = () => {
   }, [user]);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || !dataHydrated) return;
     const updatedAt = Date.now();
     persistScheduleTasksToStorage(user.id, scheduleTasks, updatedAt);
     setLastSchedulePersistAt(updatedAt);
     setLocalScheduleUpdatedAt(updatedAt);
-  }, [scheduleTasks, user]);
+  }, [scheduleTasks, user, dataHydrated]);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || !dataHydrated) return;
     persistGoalsToStorage(user.id, goals);
     setLastGoalsPersistAt(Date.now());
-  }, [goals, user]);
+  }, [goals, user, dataHydrated]);
 
   const handleStartTimer = (habit: Habit) => {
     setActiveHabit(habit);
