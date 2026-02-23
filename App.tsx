@@ -49,12 +49,12 @@ const MOCK_GOALS: Goal[] = [
   }
 ];
 
-const goalsStorageKey = 'life-goal:goals';
-const scheduleStorageKey = 'life-goal:schedule-tasks';
+const goalsStorageKey = (userId: string) => `life-goal:goals:${userId}`;
+const scheduleStorageKey = (userId: string) => `life-goal:schedule-tasks:${userId}`;
 
-const loadGoalsFromStorage = (): Goal[] => {
-  if (typeof window === 'undefined') return [];
-  const raw = window.localStorage.getItem(goalsStorageKey);
+const loadGoalsFromStorage = (userId: string | null | undefined): Goal[] => {
+  if (typeof window === 'undefined' || !userId) return [];
+  const raw = window.localStorage.getItem(goalsStorageKey(userId));
   if (!raw) return [];
   try {
     const parsed = JSON.parse(raw);
@@ -65,18 +65,18 @@ const loadGoalsFromStorage = (): Goal[] => {
   }
 };
 
-const persistGoalsToStorage = (nextGoals: Goal[]) => {
-  if (typeof window === 'undefined') return;
+const persistGoalsToStorage = (userId: string | null | undefined, nextGoals: Goal[]) => {
+  if (typeof window === 'undefined' || !userId) return;
   try {
-    window.localStorage.setItem(goalsStorageKey, JSON.stringify(nextGoals));
+    window.localStorage.setItem(goalsStorageKey(userId), JSON.stringify(nextGoals));
   } catch (error) {
     console.error('Failed to persist goals to localStorage', error);
   }
 };
 
-const loadScheduleTasksFromStorage = (): Habit[] => {
-  if (typeof window === 'undefined') return [];
-  const raw = window.localStorage.getItem(scheduleStorageKey);
+const loadScheduleTasksFromStorage = (userId: string | null | undefined): Habit[] => {
+  if (typeof window === 'undefined' || !userId) return [];
+  const raw = window.localStorage.getItem(scheduleStorageKey(userId));
   if (!raw) return [];
   try {
     const parsed = JSON.parse(raw);
@@ -87,10 +87,10 @@ const loadScheduleTasksFromStorage = (): Habit[] => {
   }
 };
 
-const persistScheduleTasksToStorage = (tasks: Habit[]) => {
-  if (typeof window === 'undefined') return;
+const persistScheduleTasksToStorage = (userId: string | null | undefined, tasks: Habit[]) => {
+  if (typeof window === 'undefined' || !userId) return;
   try {
-    window.localStorage.setItem(scheduleStorageKey, JSON.stringify(tasks));
+    window.localStorage.setItem(scheduleStorageKey(userId), JSON.stringify(tasks));
   } catch (error) {
     console.error('Failed to persist schedule tasks to localStorage', error);
   }
@@ -118,14 +118,14 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const loadData = async () => {
-      const localGoals = loadGoalsFromStorage();
-      const localScheduleTasks = loadScheduleTasksFromStorage();
       if (!user) {
-        setGoals(localGoals);
-        setScheduleTasks(localScheduleTasks);
+        setGoals([]);
+        setScheduleTasks([]);
         return;
       }
 
+      const localGoals = loadGoalsFromStorage(user.id);
+      const localScheduleTasks = loadScheduleTasksFromStorage(user.id);
       try {
         const [remoteGoals, remoteTasks] = await Promise.all([
           fetchUserGoals(user),
@@ -142,12 +142,14 @@ const App: React.FC = () => {
   }, [user]);
 
   useEffect(() => {
-    persistScheduleTasksToStorage(scheduleTasks);
-  }, [scheduleTasks]);
+    if (!user) return;
+    persistScheduleTasksToStorage(user.id, scheduleTasks);
+  }, [scheduleTasks, user]);
 
   useEffect(() => {
-    persistGoalsToStorage(goals);
-  }, [goals]);
+    if (!user) return;
+    persistGoalsToStorage(user.id, goals);
+  }, [goals, user]);
 
   const handleStartTimer = (habit: Habit) => {
     setActiveHabit(habit);
