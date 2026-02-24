@@ -14,7 +14,7 @@ import { fetchUserScheduleTasks, upsertUserScheduleTask, deleteUserScheduleTask 
 import { fetchUserHabitItems, upsertUserHabitItem, deleteUserHabitItem } from './services/habitItemsService';
 import { supabase, isSupabaseConfigured } from './services/supabaseClient';
 import { v4 as uuidv4 } from 'uuid';
-import { format } from 'date-fns';
+import { format, addDays, subDays, parseISO } from 'date-fns';
 
 const MOCK_GOALS: Goal[] = [
   {
@@ -143,6 +143,42 @@ const persistHabitItemsToStorage = (userId: string | null | undefined, items: Ha
   } catch (error) {
     console.error('Failed to persist habit items to localStorage', error);
   }
+};
+
+const datePlus = (dateStr: string, days: number) => format(addDays(parseISO(dateStr), days), 'yyyy-MM-dd');
+
+const splitHabitForDate = (habit: Habit, dateStr: string): Habit[] => {
+  const start = habit.startDate;
+  const end = habit.endDate;
+  const results: Habit[] = [];
+
+  // Part 1: Before dateStr
+  if (!start || start < dateStr) {
+    const prevDay = datePlus(dateStr, -1);
+    const completedBefore = habit.completedDates.filter(d => d <= prevDay);
+    
+    results.push({
+      ...habit,
+      endDate: prevDay,
+      completedDates: completedBefore,
+    });
+  }
+
+  // Part 2: After dateStr
+  if (!end || end > dateStr) {
+    const nextDay = datePlus(dateStr, 1);
+    const completedAfter = habit.completedDates.filter(d => d >= nextDay);
+    
+    results.push({
+      ...habit,
+      id: uuidv4(), // New ID for the future part
+      startDate: nextDay,
+      completedDates: completedAfter,
+      streak: 0, // Reset streak for new future part
+    });
+  }
+
+  return results;
 };
 
 const App: React.FC = () => {
@@ -414,9 +450,27 @@ const App: React.FC = () => {
     }
   };
 
-  const handleUpdateHabitSchedule = (habitId: string, updates: Partial<Habit>) => {
+  const handleUpdateHabitSchedule = (habitId: string, updates: Partial<Habit>, scope: 'all' | 'single' = 'all', dateStr?: string) => {
     const goal = goals.find(g => g.habits.some(h => h.id === habitId));
     if (goal) {
+      if (scope === 'single' && dateStr) {
+         const habit = goal.habits.find(h => h.id === habitId)!;
+         const splitParts = splitHabitForDate(habit, dateStr);
+         const exceptionPart: Habit = {
+             ...habit,
+             ...updates,
+             id: uuidv4(),
+             startDate: dateStr,
+             endDate: dateStr,
+             completedDates: habit.completedDates.includes(dateStr) ? [dateStr] : [],
+             streak: 0,
+         };
+         const newHabits = [...splitParts, exceptionPart];
+         const updatedHabits = goal.habits.filter(h => h.id !== habitId).concat(newHabits);
+         handleUpdateGoal({ ...goal, habits: updatedHabits });
+         return;
+      }
+
       const updatedHabits = goal.habits.map(h =>
         h.id === habitId ? { ...h, ...updates } : h
       );
@@ -424,6 +478,33 @@ const App: React.FC = () => {
       const updatedGoal: Goal = { ...goal, habits: updatedHabits };
       handleUpdateGoal(updatedGoal);
       return;
+    }
+
+    if (scope === 'single' && dateStr) {
+        const habit = scheduleTasks.find(h => h.id === habitId);
+        if (habit) {
+            const splitParts = splitHabitForDate(habit, dateStr);
+            const exceptionPart: Habit = {
+                ...habit,
+                ...updates,
+                id: uuidv4(),
+                startDate: dateStr,
+                endDate: dateStr,
+                completedDates: habit.completedDates.includes(dateStr) ? [dateStr] : [],
+                streak: 0,
+            };
+            const newHabits = [...splitParts, exceptionPart];
+            const updatedTasks = scheduleTasks.filter(h => h.id !== habitId).concat(newHabits);
+            applySnapshot({ goals, scheduleTasks: updatedTasks, habitItems }, true);
+            
+            if (user) {
+                // Delete old
+                void deleteUserScheduleTask(user, habitId);
+                // Upsert new ones
+                newHabits.forEach(h => void upsertUserScheduleTask(user, h));
+            }
+        }
+        return;
     }
 
     const updatedTasks = scheduleTasks.map(h => (h.id === habitId ? { ...h, ...updates } : h));
@@ -468,9 +549,17 @@ const App: React.FC = () => {
     }
   };
 
-  const handleDeleteHabitFromSchedule = (habitId: string) => {
+  const handleDeleteHabitFromSchedule = (habitId: string, scope: 'all' | 'single' = 'all', dateStr?: string) => {
     const goal = goals.find(g => g.habits.some(h => h.id === habitId));
     if (goal) {
+      if (scope === 'single' && dateStr) {
+          const habit = goal.habits.find(h => h.id === habitId)!;
+          const newHabits = splitHabitForDate(habit, dateStr);
+          const updatedHabits = goal.habits.filter(h => h.id !== habitId).concat(newHabits);
+          handleUpdateGoal({ ...goal, habits: updatedHabits });
+          return;
+      }
+
       const updatedGoal: Goal = {
         ...goal,
         habits: goal.habits.filter(h => h.id !== habitId),
@@ -478,6 +567,21 @@ const App: React.FC = () => {
 
       handleUpdateGoal(updatedGoal);
       return;
+    }
+
+    if (scope === 'single' && dateStr) {
+        const habit = scheduleTasks.find(h => h.id === habitId);
+        if (habit) {
+            const newHabits = splitHabitForDate(habit, dateStr);
+            const updatedTasks = scheduleTasks.filter(h => h.id !== habitId).concat(newHabits);
+            applySnapshot({ goals, scheduleTasks: updatedTasks, habitItems }, true);
+            
+            if (user) {
+                void deleteUserScheduleTask(user, habitId);
+                newHabits.forEach(h => void upsertUserScheduleTask(user, h));
+            }
+        }
+        return;
     }
 
     const updatedTasks = scheduleTasks.filter(habit => habit.id !== habitId);

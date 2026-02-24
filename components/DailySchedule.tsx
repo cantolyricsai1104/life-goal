@@ -7,9 +7,9 @@ interface DailyScheduleProps {
   goals: Goal[];
   scheduleTasks: Habit[];
   onToggleHabit: (habitId: string, dateStr?: string) => void;
-  onUpdateHabitSchedule: (habitId: string, updates: Partial<Habit>) => void;
+  onUpdateHabitSchedule: (habitId: string, updates: Partial<Habit>, scope?: 'all' | 'single', date?: string) => void;
   onCreateHabit: (timeOfDay: string, duration: number, title: string, startDate?: string, endDate?: string) => void;
-  onDeleteHabit: (habitId: string) => void;
+  onDeleteHabit: (habitId: string, scope?: 'all' | 'single', date?: string) => void;
   onStartTimer: (habit: Habit) => void;
 }
 
@@ -82,12 +82,60 @@ export const DailySchedule: React.FC<DailyScheduleProps> = ({
   goals,
   scheduleTasks,
   onToggleHabit,
-  onUpdateHabitSchedule,
+  onUpdateHabitSchedule: updateHabitProp,
   onCreateHabit,
-  onDeleteHabit,
+  onDeleteHabit: deleteHabitProp,
   onStartTimer,
 }) => {
   const [selectedDate, setSelectedDate] = useState(new Date());
+  const [recurrenceConfirm, setRecurrenceConfirm] = useState<{
+    isOpen: boolean;
+    type: 'update' | 'delete';
+    habitId: string;
+    updates?: Partial<Habit>;
+    habitTitle: string;
+  }>({ isOpen: false, type: 'update', habitId: '', habitTitle: '' });
+
+  const isMultiDayHabit = useCallback((habitId: string) => {
+    const habit = scheduleTasks.find(h => h.id === habitId) || 
+                  goals.flatMap(g => g.habits).find(h => h.id === habitId);
+    if (!habit) return false;
+    if (habit.frequency === 'daily' || habit.frequency === 'weekly') return true;
+    if (habit.startDate && habit.endDate && habit.startDate !== habit.endDate) return true;
+    return false;
+  }, [scheduleTasks, goals]);
+
+  const onUpdateHabitSchedule = useCallback((habitId: string, updates: Partial<Habit>) => {
+    if (isMultiDayHabit(habitId)) {
+       const habit = scheduleTasks.find(h => h.id === habitId) || 
+                  goals.flatMap(g => g.habits).find(h => h.id === habitId);
+       setRecurrenceConfirm({
+         isOpen: true,
+         type: 'update',
+         habitId,
+         updates,
+         habitTitle: habit?.title || 'Task',
+       });
+    } else {
+       updateHabitProp(habitId, updates, 'all');
+    }
+  }, [isMultiDayHabit, scheduleTasks, goals, updateHabitProp]);
+
+  const onDeleteHabit = useCallback((habitId: string) => {
+    if (isMultiDayHabit(habitId)) {
+       const habit = scheduleTasks.find(h => h.id === habitId) || 
+                  goals.flatMap(g => g.habits).find(h => h.id === habitId);
+       setRecurrenceConfirm({
+         isOpen: true,
+         type: 'delete',
+         habitId,
+         habitTitle: habit?.title || 'Task',
+       });
+    } else {
+       deleteHabitProp(habitId, 'all');
+    }
+  }, [isMultiDayHabit, scheduleTasks, goals, deleteHabitProp]);
+
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const timelineRef = useRef<HTMLDivElement>(null);
   const [interaction, setInteraction] = useState<InteractionState | null>(null);
@@ -1008,6 +1056,53 @@ export const DailySchedule: React.FC<DailyScheduleProps> = ({
                 </button>
               </div>
             )}
+          </div>
+        </div>
+      )}
+      {recurrenceConfirm.isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-sm w-full p-6 space-y-4 animate-in fade-in zoom-in-95 duration-200">
+            <h3 className="text-lg font-bold text-slate-800">
+              {recurrenceConfirm.type === 'delete' ? 'Delete Recurring Task' : 'Update Recurring Task'}
+            </h3>
+            <p className="text-slate-600 text-sm">
+              "<span className="font-semibold">{recurrenceConfirm.habitTitle}</span>" repeats on multiple days.
+              Do you want to {recurrenceConfirm.type} this occurrence or the entire series?
+            </p>
+            <div className="flex flex-col gap-2 pt-2">
+              <button
+                onClick={() => {
+                  if (recurrenceConfirm.type === 'delete') {
+                    deleteHabitProp(recurrenceConfirm.habitId, 'single', selectedDateStr);
+                  } else {
+                    updateHabitProp(recurrenceConfirm.habitId, recurrenceConfirm.updates!, 'single', selectedDateStr);
+                  }
+                  setRecurrenceConfirm(prev => ({ ...prev, isOpen: false }));
+                }}
+                className="w-full py-2.5 px-4 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-medium rounded-lg transition-colors text-sm"
+              >
+                Only This Day ({format(selectedDate, 'MMM d')})
+              </button>
+              <button
+                onClick={() => {
+                  if (recurrenceConfirm.type === 'delete') {
+                    deleteHabitProp(recurrenceConfirm.habitId, 'all');
+                  } else {
+                    updateHabitProp(recurrenceConfirm.habitId, recurrenceConfirm.updates!, 'all');
+                  }
+                  setRecurrenceConfirm(prev => ({ ...prev, isOpen: false }));
+                }}
+                className="w-full py-2.5 px-4 bg-violet-600 hover:bg-violet-700 text-white font-medium rounded-lg transition-colors text-sm"
+              >
+                Entire Series
+              </button>
+            </div>
+            <button
+              onClick={() => setRecurrenceConfirm(prev => ({ ...prev, isOpen: false }))}
+              className="w-full py-2 text-slate-400 hover:text-slate-600 text-sm font-medium transition-colors"
+            >
+              Cancel
+            </button>
           </div>
         </div>
       )}
