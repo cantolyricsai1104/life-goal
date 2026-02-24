@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { Goal, Habit, LifeAspect, ASPECT_COLORS, ASPECT_TEXT_COLORS } from '../types';
 import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Check, MoreHorizontal, Timer as TimerIcon, Play, Pause } from './Icons';
 import { format, addDays, startOfWeek, isSameDay, parseISO } from 'date-fns';
