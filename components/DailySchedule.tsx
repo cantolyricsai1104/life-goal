@@ -416,6 +416,99 @@ export const DailySchedule: React.FC<DailyScheduleProps> = ({
     return () => window.clearInterval(id);
   }, [inlineTimers]);
 
+  // Touch handling for mobile interactions
+  const touchTimer = useRef<number | null>(null);
+  const touchStartPos = useRef<{ x: number; y: number } | null>(null);
+  const isLongPress = useRef(false);
+
+  const handleMobileContextMenu = (clientX: number, clientY: number, type: 'empty' | 'event', param?: Habit) => {
+    if (!timelineRef.current) return;
+    
+    // Calculate minutes based on touch position relative to timeline
+    const rect = timelineRef.current.getBoundingClientRect();
+    const y = clientY - rect.top;
+    
+    if (type === 'empty') {
+      const minutes = snapMinutes(y);
+      const maxStart = 24 * 60 - 60;
+      const startMinutes = Math.max(0, Math.min(maxStart, minutes));
+      setContextMenu({
+        target: 'empty',
+        minutes: startMinutes,
+        x: clientX,
+        y: clientY,
+        name: 'New Task',
+        startDate: selectedDateStr,
+        endDate: selectedDateStr,
+      });
+    } else if (type === 'event' && param) {
+      const { minutes: habitMinutes } = getHabitDisplay(param);
+      setContextMenu({
+        target: 'event',
+        habitId: param.id,
+        minutes: habitMinutes,
+        x: clientX,
+        y: clientY,
+        name: param.title,
+        startDate: param.startDate ?? selectedDateStr,
+        endDate: param.endDate ?? selectedDateStr,
+      });
+    }
+  };
+
+  const handleTouchStart = (e: React.TouchEvent, type: 'empty' | 'event', param?: Habit) => {
+    // Only handle single touch
+    if (e.touches.length !== 1) return;
+    
+    const touch = e.touches[0];
+    touchStartPos.current = { x: touch.clientX, y: touch.clientY };
+    isLongPress.current = false;
+
+    // Clear any existing timer
+    if (touchTimer.current !== null) {
+      window.clearTimeout(touchTimer.current);
+    }
+
+    touchTimer.current = window.setTimeout(() => {
+      isLongPress.current = true;
+      handleMobileContextMenu(touch.clientX, touch.clientY, type, param);
+    }, 500); // 500ms for long press
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!touchStartPos.current) return;
+    const touch = e.touches[0];
+    const dx = Math.abs(touch.clientX - touchStartPos.current.x);
+    const dy = Math.abs(touch.clientY - touchStartPos.current.y);
+    
+    // If moved more than 10px, cancel long press
+    if (dx > 10 || dy > 10) {
+      if (touchTimer.current !== null) {
+        window.clearTimeout(touchTimer.current);
+        touchTimer.current = null;
+      }
+      touchStartPos.current = null;
+    }
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent, type: 'empty' | 'event', param?: Habit) => {
+    if (touchTimer.current !== null) {
+      window.clearTimeout(touchTimer.current);
+      touchTimer.current = null;
+    }
+    
+    // Handle short press on event -> Edit
+    // Only if we haven't triggered long press and we haven't moved significantly (checked via touchStartPos not being null)
+    if (!isLongPress.current && type === 'event' && param && touchStartPos.current) {
+      e.preventDefault(); // Prevent default click if we handle it here
+      const touch = e.changedTouches[0];
+      handleMobileContextMenu(touch.clientX, touch.clientY, 'event', param);
+    }
+    
+    touchStartPos.current = null;
+    isLongPress.current = false;
+  };
+
   // Group habits by hour to avoid overlap or just list them
   // For the timeline view, we want to place them at specific vertical positions
   
@@ -501,6 +594,9 @@ export const DailySchedule: React.FC<DailyScheduleProps> = ({
           ref={timelineRef}
           className="relative min-h-[1440px]"
           onContextMenu={handleTimelineContextMenu}
+          onTouchStart={(e) => handleTouchStart(e, 'empty')}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={(e) => handleTouchEnd(e, 'empty')}
         >
           {hours.map(hour => (
             <div key={hour} className="absolute w-full flex" style={{ top: `${hour * 60}px`, height: '60px' }}>
@@ -579,6 +675,18 @@ export const DailySchedule: React.FC<DailyScheduleProps> = ({
                 }}
                 onMouseDown={handleEventMouseDown}
                 onContextMenu={handleEventContextMenu}
+                onTouchStart={(e) => {
+                  e.stopPropagation();
+                  handleTouchStart(e, 'event', habit);
+                }}
+                onTouchMove={(e) => {
+                  e.stopPropagation();
+                  handleTouchMove(e);
+                }}
+                onTouchEnd={(e) => {
+                  e.stopPropagation();
+                  handleTouchEnd(e, 'event', habit);
+                }}
                 onDoubleClick={(event) => {
                   event.stopPropagation();
                   if (!isInRange) return;
