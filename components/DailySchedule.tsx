@@ -225,7 +225,18 @@ export const DailySchedule: React.FC<DailyScheduleProps> = ({
     const handleMove = (event: MouseEvent) => {
       const deltaY = event.clientY - interaction.startY;
       const deltaMinutes = snapMinutes(interaction.startMinutes + deltaY) - interaction.startMinutes;
+      processMove(deltaY, deltaMinutes);
+    };
 
+    const handleTouchMoveWindow = (event: TouchEvent) => {
+      if (event.cancelable) event.preventDefault(); // Prevent scrolling while dragging
+      const touch = event.touches[0];
+      const deltaY = touch.clientY - interaction.startY;
+      const deltaMinutes = snapMinutes(interaction.startMinutes + deltaY) - interaction.startMinutes;
+      processMove(deltaY, deltaMinutes);
+    };
+
+    const processMove = (deltaY: number, deltaMinutes: number) => {
       if (!tempEdits[interaction.habitId]) {
         return;
       }
@@ -286,10 +297,14 @@ export const DailySchedule: React.FC<DailyScheduleProps> = ({
 
     window.addEventListener('mousemove', handleMove);
     window.addEventListener('mouseup', handleUp);
+    window.addEventListener('touchmove', handleTouchMoveWindow, { passive: false });
+    window.addEventListener('touchend', handleUp);
 
     return () => {
       window.removeEventListener('mousemove', handleMove);
       window.removeEventListener('mouseup', handleUp);
+      window.removeEventListener('touchmove', handleTouchMoveWindow);
+      window.removeEventListener('touchend', handleUp);
     };
   }, [interaction, onUpdateHabitSchedule, tempEdits]);
 
@@ -456,7 +471,7 @@ export const DailySchedule: React.FC<DailyScheduleProps> = ({
     }
   };
 
-  const handleTouchStart = (e: React.TouchEvent, type: 'empty' | 'event', param?: Habit) => {
+  const handleTouchStart = (e: React.TouchEvent, type: 'empty' | 'event', param?: Habit, mode: InteractionMode = 'move') => {
     // Only handle single touch
     if (e.touches.length !== 1) return;
     
@@ -471,7 +486,13 @@ export const DailySchedule: React.FC<DailyScheduleProps> = ({
 
     touchTimer.current = window.setTimeout(() => {
       isLongPress.current = true;
-      handleMobileContextMenu(touch.clientX, touch.clientY, type, param);
+      if (type === 'event' && param) {
+        // Start interaction (drag/resize) instead of context menu
+        const { minutes: startMinutes, duration } = getHabitDisplay(param);
+        startInteraction(param.id, mode, touch.clientY, startMinutes, duration);
+      } else {
+        handleMobileContextMenu(touch.clientX, touch.clientY, type, param);
+      }
     }, 500); // 500ms for long press
   };
 
@@ -498,9 +519,10 @@ export const DailySchedule: React.FC<DailyScheduleProps> = ({
     }
     
     // Handle short press on event -> Edit
-    // Only if we haven't triggered long press and we haven't moved significantly (checked via touchStartPos not being null)
-    if (!isLongPress.current && type === 'event' && param && touchStartPos.current) {
-      e.preventDefault(); // Prevent default click if we handle it here
+    // Only if we haven't triggered long press and we haven't moved significantly
+    // AND we are NOT currently interacting (dragging/resizing)
+    if (!isLongPress.current && type === 'event' && param && touchStartPos.current && !interaction) {
+      e.preventDefault(); 
       const touch = e.changedTouches[0];
       handleMobileContextMenu(touch.clientX, touch.clientY, 'event', param);
     }
@@ -694,12 +716,36 @@ export const DailySchedule: React.FC<DailyScheduleProps> = ({
                 }}
               >
                 <div
-                  className="absolute inset-x-0 top-0 h-1 cursor-n-resize"
+                  className="absolute inset-x-0 top-0 h-4 -mt-2 cursor-n-resize z-20"
                   onMouseDown={(event) => handleResizeMouseDown(event, 'resize-top')}
+                  onTouchStart={(e) => {
+                    e.stopPropagation();
+                    handleTouchStart(e, 'event', habit, 'resize-top');
+                  }}
+                  onTouchMove={(e) => {
+                    e.stopPropagation();
+                    handleTouchMove(e);
+                  }}
+                  onTouchEnd={(e) => {
+                    e.stopPropagation();
+                    handleTouchEnd(e, 'event', habit);
+                  }}
                 />
                 <div
-                  className="absolute inset-x-0 bottom-0 h-1 cursor-s-resize"
+                  className="absolute inset-x-0 bottom-0 h-4 -mb-2 cursor-s-resize z-20"
                   onMouseDown={(event) => handleResizeMouseDown(event, 'resize-bottom')}
+                  onTouchStart={(e) => {
+                    e.stopPropagation();
+                    handleTouchStart(e, 'event', habit, 'resize-bottom');
+                  }}
+                  onTouchMove={(e) => {
+                    e.stopPropagation();
+                    handleTouchMove(e);
+                  }}
+                  onTouchEnd={(e) => {
+                    e.stopPropagation();
+                    handleTouchEnd(e, 'event', habit);
+                  }}
                 />
                 <div className="flex justify-between items-start h-full">
                   <div className="flex flex-col h-full justify-between">
