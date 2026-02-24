@@ -34,6 +34,8 @@ interface ContextMenuState {
   name: string;
   startDate?: string;
   endDate?: string;
+  timeOfDay?: string;
+  duration?: number;
 }
 
 interface TimerMenuState {
@@ -325,6 +327,8 @@ export const DailySchedule: React.FC<DailyScheduleProps> = ({
       name: 'New Task',
       startDate: selectedDateStr,
       endDate: selectedDateStr,
+      timeOfDay: minutesToTime(startMinutes),
+      duration: 60,
     });
   };
 
@@ -347,11 +351,21 @@ export const DailySchedule: React.FC<DailyScheduleProps> = ({
     setContextMenu({ ...contextMenu, endDate: value });
   };
 
+  const handleContextTimeChange = (value: string) => {
+    if (!contextMenu) return;
+    setContextMenu({ ...contextMenu, timeOfDay: value });
+  };
+
+  const handleContextDurationChange = (value: string) => {
+    if (!contextMenu) return;
+    setContextMenu({ ...contextMenu, duration: Number(value) });
+  };
+
   const handleCreateFromContext = () => {
     if (!contextMenu || contextMenu.target !== 'empty') return;
-    const timeOfDay = minutesToTime(contextMenu.minutes);
+    const timeOfDay = contextMenu.timeOfDay || minutesToTime(contextMenu.minutes);
     const title = contextMenu.name.trim() || 'New Task';
-    onCreateHabit(timeOfDay, 60, title, contextMenu.startDate, contextMenu.endDate);
+    onCreateHabit(timeOfDay, contextMenu.duration || 60, title, contextMenu.startDate, contextMenu.endDate);
     setContextMenu(null);
   };
 
@@ -374,6 +388,9 @@ export const DailySchedule: React.FC<DailyScheduleProps> = ({
     onUpdateHabitSchedule(contextMenu.habitId, {
       startDate: contextMenu.startDate,
       endDate: contextMenu.endDate,
+      timeOfDay: contextMenu.timeOfDay,
+      recommendedDuration: contextMenu.duration,
+      title: contextMenu.name.trim() || undefined,
     });
     setContextMenu(null);
   };
@@ -457,9 +474,11 @@ export const DailySchedule: React.FC<DailyScheduleProps> = ({
         name: 'New Task',
         startDate: selectedDateStr,
         endDate: selectedDateStr,
+        timeOfDay: minutesToTime(startMinutes),
+        duration: 60,
       });
     } else if (type === 'event' && param) {
-      const { minutes: habitMinutes } = getHabitDisplay(param);
+      const { minutes: habitMinutes, duration, timeOfDay } = getHabitDisplay(param);
       setContextMenu({
         target: 'event',
         habitId: param.id,
@@ -469,17 +488,21 @@ export const DailySchedule: React.FC<DailyScheduleProps> = ({
         name: param.title,
         startDate: param.startDate ?? selectedDateStr,
         endDate: param.endDate ?? selectedDateStr,
+        timeOfDay,
+        duration,
       });
     }
   };
 
-  const handleTouchStart = (e: React.TouchEvent, type: 'empty' | 'event', param?: Habit, mode: InteractionMode = 'move') => {
+  const handleTouchStart = (e: React.TouchEvent, type: 'empty' | 'event', param?: Habit) => {
     // Only handle single touch
     if (e.touches.length !== 1) return;
     
     isTouchInteraction.current = true;
     const touch = e.touches[0];
-    touchStartPos.current = { x: touch.clientX, y: touch.clientY };
+    const clientX = touch.clientX;
+    const clientY = touch.clientY;
+    touchStartPos.current = { x: clientX, y: clientY };
     isLongPress.current = false;
 
     // Clear any existing timer
@@ -489,13 +512,8 @@ export const DailySchedule: React.FC<DailyScheduleProps> = ({
 
     touchTimer.current = window.setTimeout(() => {
       isLongPress.current = true;
-      if (type === 'event' && param) {
-        // Start interaction (drag/resize) instead of context menu
-        const { minutes: startMinutes, duration } = getHabitDisplay(param);
-        startInteraction(param.id, mode, touch.clientY, startMinutes, duration);
-      } else {
-        handleMobileContextMenu(touch.clientX, touch.clientY, type, param);
-      }
+      // Removed drag interaction logic, now long press also just opens context menu
+      handleMobileContextMenu(clientX, clientY, type, param);
     }, 500); // 500ms for long press
   };
 
@@ -521,13 +539,14 @@ export const DailySchedule: React.FC<DailyScheduleProps> = ({
       touchTimer.current = null;
     }
     
-    // Handle short press on event -> Edit
+    // Handle short press on empty -> Create, or event -> Edit
     // Only if we haven't triggered long press and we haven't moved significantly
     // AND we are NOT currently interacting (dragging/resizing)
-    if (!isLongPress.current && type === 'event' && param && touchStartPos.current && !interaction) {
-      e.preventDefault(); 
-      const touch = e.changedTouches[0];
-      handleMobileContextMenu(touch.clientX, touch.clientY, 'event', param);
+    if (!isLongPress.current && touchStartPos.current && !interaction) {
+      if ((type === 'event' && param) || type === 'empty') {
+        const touch = e.changedTouches[0];
+        handleMobileContextMenu(touch.clientX, touch.clientY, type, param);
+      }
     }
     
     touchStartPos.current = null;
@@ -688,6 +707,8 @@ export const DailySchedule: React.FC<DailyScheduleProps> = ({
                 name: habit.title,
                 startDate: habit.startDate ?? selectedDateStr,
                 endDate: habit.endDate ?? selectedDateStr,
+                timeOfDay,
+                duration,
               });
             };
 
@@ -717,6 +738,23 @@ export const DailySchedule: React.FC<DailyScheduleProps> = ({
                 onTouchEnd={(e) => {
                   e.stopPropagation();
                   handleTouchEnd(e, 'event', habit);
+                }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (!isTouchInteraction.current) {
+                    setContextMenu({
+                      target: 'event',
+                      habitId: habit.id,
+                      minutes,
+                      x: e.clientX,
+                      y: e.clientY,
+                      name: habit.title,
+                      startDate: habit.startDate ?? selectedDateStr,
+                      endDate: habit.endDate ?? selectedDateStr,
+                      timeOfDay,
+                      duration,
+                    });
+                  }
                 }}
                 onDoubleClick={(event) => {
                   event.stopPropagation();
@@ -921,6 +959,28 @@ export const DailySchedule: React.FC<DailyScheduleProps> = ({
                 className="w-full border border-slate-200 rounded-md px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-violet-500"
               />
             </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="flex flex-col">
+                <label className="text-[10px] text-slate-500">Time</label>
+                <input
+                  type="time"
+                  value={contextMenu.timeOfDay ?? ''}
+                  onChange={event => handleContextTimeChange(event.target.value)}
+                  className="w-full border border-slate-200 rounded-md px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-violet-500"
+                />
+              </div>
+              <div className="flex flex-col">
+                <label className="text-[10px] text-slate-500">Minutes</label>
+                <input
+                  type="number"
+                  min="15"
+                  step="15"
+                  value={contextMenu.duration ?? 60}
+                  onChange={event => handleContextDurationChange(event.target.value)}
+                  className="w-full border border-slate-200 rounded-md px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-violet-500"
+                />
+              </div>
+            </div>
             {contextMenu.target === 'empty' && (
               <button
                 type="button"
@@ -937,14 +997,7 @@ export const DailySchedule: React.FC<DailyScheduleProps> = ({
                   onClick={handleUpdateRangeFromContext}
                   className="w-full text-sm font-medium px-3 py-1.5 rounded-md bg-violet-600 text-white hover:bg-violet-700"
                 >
-                  Update dates
-                </button>
-                <button
-                  type="button"
-                  onClick={handleRenameFromContext}
-                  className="w-full text-sm font-medium px-3 py-1.5 rounded-md bg-slate-900 text-white hover:bg-slate-800"
-                >
-                  Rename task
+                  Update task
                 </button>
                 <button
                   type="button"
