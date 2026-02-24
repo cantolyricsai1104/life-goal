@@ -728,6 +728,8 @@ export const DailySchedule: React.FC<DailyScheduleProps> = ({
                           y: event.clientY,
                         });
                       }}
+                      onTouchStart={(e) => e.stopPropagation()}
+                      onTouchEnd={(e) => e.stopPropagation()}
                     >
                       <TimerIcon className="w-3 h-3 text-slate-600" />
                     </button>
@@ -741,6 +743,8 @@ export const DailySchedule: React.FC<DailyScheduleProps> = ({
                         if (!isInRange) return;
                         onToggleHabit(habit.id, selectedDateStr);
                       }}
+                      onTouchStart={(e) => e.stopPropagation()}
+                      onTouchEnd={(e) => e.stopPropagation()}
                     >
                       <Check className="w-3 h-3" />
                     </button>
@@ -772,6 +776,8 @@ export const DailySchedule: React.FC<DailyScheduleProps> = ({
                               };
                             });
                           }}
+                          onTouchStart={(e) => e.stopPropagation()}
+                          onTouchEnd={(e) => e.stopPropagation()}
                         >
                           {inlineTimer.running && inlineTimer.remaining > 0 ? (
                             <Pause className="w-2 h-2 text-emerald-600" />
