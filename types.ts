@@ -26,6 +26,17 @@ export interface Milestone {
   completed: boolean;
 }
 
+export type HabitType = 'good' | 'bad';
+
+export type HabitItem = {
+  id: string;
+  title: string;
+  type: HabitType;
+  completedDates: string[];
+  startDate?: string;
+  endDate?: string;
+};
+
 export interface Goal {
   id: string;
   title: string;

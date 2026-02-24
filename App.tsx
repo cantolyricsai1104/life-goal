@@ -1,16 +1,17 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Plus, Trophy, BarChart3, Calendar } from './components/Icons';
-import { Goal, LifeAspect, Habit } from './types';
+import { Goal, LifeAspect, Habit, HabitItem } from './types';
 import { GoalCard } from './components/GoalCard';
 import { GoalWizard } from './components/GoalWizard';
 import { FullScreenTimer } from './components/FullScreenTimer';
 import { DailySchedule } from './components/DailySchedule';
-import { HabitBoard, HabitItem } from './components/HabitBoard';
+import { HabitBoard } from './components/HabitBoard';
 import { LandingPage } from './components/LandingPage';
 import { useAuth } from './contexts/AuthContext';
 import { saveRecord } from './services/recordsService';
 import { fetchUserGoals, upsertUserGoal, deleteUserGoal } from './services/goalsService';
 import { fetchUserScheduleTasks, upsertUserScheduleTask, deleteUserScheduleTask } from './services/scheduleTasksService';
+import { fetchUserHabitItems, upsertUserHabitItem, deleteUserHabitItem } from './services/habitItemsService';
 import { supabase, isSupabaseConfigured } from './services/supabaseClient';
 import { v4 as uuidv4 } from 'uuid';
 import { format } from 'date-fns';
@@ -190,11 +191,13 @@ const App: React.FC = () => {
       const localHabitItems = loadHabitItemsFromStorage(user.id);
       setLocalScheduleUpdatedAt(localScheduleSnapshot.updatedAt);
       try {
-        const [remoteGoals, remoteTasks] = await Promise.all([
+        const [remoteGoals, remoteTasks, remoteHabitItems] = await Promise.all([
           fetchUserGoals(user),
           fetchUserScheduleTasks(user),
+          fetchUserHabitItems(user),
         ]);
         const resolvedGoals = remoteGoals.length > 0 ? remoteGoals : localGoals;
+        const resolvedHabitItems = remoteHabitItems.length > 0 ? remoteHabitItems : localHabitItems;
         setRemoteScheduleUpdatedAt(remoteTasks.latestUpdatedAt);
         const shouldPreferLocal =
           localScheduleSnapshot.tasks.length > 0 &&
@@ -206,11 +209,11 @@ const App: React.FC = () => {
         const snapshot: AppSnapshot = {
           goals: resolvedGoals,
           scheduleTasks: resolvedScheduleTasks,
-          habitItems: localHabitItems,
+          habitItems: resolvedHabitItems,
         };
         setGoals(resolvedGoals);
         setScheduleTasks(resolvedScheduleTasks);
-        setHabitItems(localHabitItems);
+        setHabitItems(resolvedHabitItems);
         setHistory([snapshot]);
         setHistoryIndex(0);
       } catch (error) {
@@ -274,11 +277,19 @@ const App: React.FC = () => {
     const prevTaskIds = new Set(previous.scheduleTasks.map(task => task.id));
     const tasksToDelete = previous.scheduleTasks.filter(task => !nextTaskIds.has(task.id));
     const tasksToUpsert = next.scheduleTasks;
+
+    const nextItemIds = new Set(next.habitItems.map(item => item.id));
+    const prevItemIds = new Set(previous.habitItems.map(item => item.id));
+    const itemsToDelete = previous.habitItems.filter(item => !nextItemIds.has(item.id));
+    const itemsToUpsert = next.habitItems;
+
     void Promise.all([
       ...goalsToUpsert.map(goal => upsertUserGoal(user, goal)),
       ...goalsToDelete.map(goal => deleteUserGoal(user, goal.id)),
       ...tasksToUpsert.map(task => upsertUserScheduleTask(user, task)),
       ...tasksToDelete.map(task => deleteUserScheduleTask(user, task.id)),
+      ...itemsToUpsert.map(item => upsertUserHabitItem(user, item)),
+      ...itemsToDelete.map(item => deleteUserHabitItem(user, item.id)),
     ]).catch((error) => {
       console.error('Failed to sync undo/redo snapshot to Supabase', error);
     });
@@ -490,6 +501,12 @@ const App: React.FC = () => {
     };
     const updatedItems = [next, ...habitItems];
     applySnapshot({ goals, scheduleTasks, habitItems: updatedItems }, true);
+
+    if (user) {
+      void upsertUserHabitItem(user, next).catch((error) => {
+        console.error('Failed to persist habit item to Supabase', error);
+      });
+    }
   };
 
   const handleToggleHabitItem = (habitId: string, dateStr: string) => {
@@ -502,11 +519,26 @@ const App: React.FC = () => {
       return { ...item, completedDates };
     });
     applySnapshot({ goals, scheduleTasks, habitItems: updatedItems }, true);
+
+    if (user) {
+      const updatedItem = updatedItems.find(i => i.id === habitId);
+      if (updatedItem) {
+        void upsertUserHabitItem(user, updatedItem).catch((error) => {
+          console.error('Failed to persist habit item toggle to Supabase', error);
+        });
+      }
+    }
   };
 
   const handleRemoveHabitItem = (habitId: string) => {
     const updatedItems = habitItems.filter(item => item.id !== habitId);
     applySnapshot({ goals, scheduleTasks, habitItems: updatedItems }, true);
+
+    if (user) {
+      void deleteUserHabitItem(user, habitId).catch((error) => {
+        console.error('Failed to delete habit item from Supabase', error);
+      });
+    }
   };
 
   const handleAddGoal = async (goal: Goal) => {
@@ -783,6 +815,15 @@ const App: React.FC = () => {
                 item.id === habitId ? { ...item, startDate, endDate } : item
               );
               applySnapshot({ goals, scheduleTasks, habitItems: updatedItems }, true);
+
+              if (user) {
+                const updatedItem = updatedItems.find(i => i.id === habitId);
+                if (updatedItem) {
+                  void upsertUserHabitItem(user, updatedItem).catch((error) => {
+                    console.error('Failed to persist habit item date update to Supabase', error);
+                  });
+                }
+              }
             }}
           />
         )}

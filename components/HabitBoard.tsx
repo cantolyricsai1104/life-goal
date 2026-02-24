@@ -1,17 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { addDays, format, isSameDay, startOfWeek } from 'date-fns';
 import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Check } from './Icons';
-
-export type HabitType = 'good' | 'bad';
-
-export type HabitItem = {
-  id: string;
-  title: string;
-  type: HabitType;
-  completedDates: string[];
-  startDate?: string;
-  endDate?: string;
-};
+import { HabitItem, HabitType } from '../types';
 
 interface HabitBoardProps {
   habits: HabitItem[];
