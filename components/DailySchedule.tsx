@@ -310,6 +310,7 @@ export const DailySchedule: React.FC<DailyScheduleProps> = ({
 
   const handleTimelineContextMenu = (event: React.MouseEvent<HTMLDivElement>) => {
     event.preventDefault();
+    if (isTouchInteraction.current) return; // Ignore if triggered by touch
     if (!timelineRef.current) return;
     const rect = timelineRef.current.getBoundingClientRect();
     const y = event.clientY - rect.top;
@@ -435,6 +436,7 @@ export const DailySchedule: React.FC<DailyScheduleProps> = ({
   const touchTimer = useRef<number | null>(null);
   const touchStartPos = useRef<{ x: number; y: number } | null>(null);
   const isLongPress = useRef(false);
+  const isTouchInteraction = useRef(false); // Flag to track if we are in a touch interaction
 
   const handleMobileContextMenu = (clientX: number, clientY: number, type: 'empty' | 'event', param?: Habit) => {
     if (!timelineRef.current) return;
@@ -475,6 +477,7 @@ export const DailySchedule: React.FC<DailyScheduleProps> = ({
     // Only handle single touch
     if (e.touches.length !== 1) return;
     
+    isTouchInteraction.current = true;
     const touch = e.touches[0];
     touchStartPos.current = { x: touch.clientX, y: touch.clientY };
     isLongPress.current = false;
@@ -529,6 +532,11 @@ export const DailySchedule: React.FC<DailyScheduleProps> = ({
     
     touchStartPos.current = null;
     isLongPress.current = false;
+    
+    // Reset touch interaction flag after a short delay to allow contextmenu event to be ignored
+    setTimeout(() => {
+      isTouchInteraction.current = false;
+    }, 100);
   };
 
   // Group habits by hour to avoid overlap or just list them
@@ -669,6 +677,7 @@ export const DailySchedule: React.FC<DailyScheduleProps> = ({
 
             const handleEventContextMenu = (event: React.MouseEvent<HTMLDivElement>) => {
               event.preventDefault();
+              if (isTouchInteraction.current) return; // Ignore if triggered by touch
               event.stopPropagation();
               setContextMenu({
                 target: 'event',
